@@ -1,5 +1,7 @@
 # Market-Neutral Equity Alpha Research Platform
 
+> Implementation status, 19 September 2026: a public-data Ridge baseline, leakage tests, walk-forward evaluation, and a sector/beta-neutral weekly portfolio are implemented. The documented baseline has weak net performance after transaction costs; this plan remains the roadmap for feature ablations, nonlinear-model comparison, and robustness research.
+
 ## Objective
 
 Build an end-to-end quantitative research project that predicts next-week **residual equity returns** and converts those forecasts into a sector- and beta-neutral long-short portfolio. The finished project should demonstrate feature research, machine-learning experimentation, realistic backtesting, and rigorous validation.

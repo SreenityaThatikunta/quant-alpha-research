@@ -4,6 +4,10 @@
 
 Completed baseline run on 19 September 2026. This is an educational, public-data benchmark—not investment advice or a production trading result.
 
+### Reproduce
+
+Run `python download_data.py --limit 300`, then invoke `run_research.py` with the generated equity panel and SPY benchmark. The committed README provides the full command. The documented baseline output directory is `data/processed/sp500_ridge_next_open_20260919` (excluded from Git because it contains generated data).
+
 ## Methodology
 
 - Universe: liquid US equities screened using trailing median dollar volume and prior-day price.
