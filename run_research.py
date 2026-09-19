@@ -16,7 +16,8 @@ from src.backtest import run_weekly_backtest, weekly_rebalance_dates
 from src.data import construct_universe
 from src.diagnostics import average_cross_sectional_signal_correlation, signal_library_summary
 from src.experiments import build_run_manifest, write_run_manifest
-from src.features import RAW_FEATURE_COLUMNS, add_features
+from src.features import RAW_FEATURE_COLUMNS, add_cross_sectional_transforms, add_features
+from src.fundamentals import FUNDAMENTAL_FEATURE_COLUMNS, add_fundamental_features, align_fundamentals_asof
 from src.metrics import deflated_sharpe_ratio, performance_metrics, prediction_metrics
 from src.models import walk_forward_predictions
 from src.portfolio import construct_optimized_portfolios, construct_portfolio, exposure_diagnostics
@@ -36,6 +37,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Leakage-safe equity alpha research run.")
     parser.add_argument("--panel", type=Path, required=True, help="OHLCV panel with date/ticker columns")
     parser.add_argument("--benchmark", type=Path, required=True, help="Benchmark daily close data")
+    parser.add_argument("--fundamentals", type=Path, default=None, help="Optional SEC XBRL fact table with CIK-aligned timestamps")
     parser.add_argument("--output", type=Path, required=True, help="Directory for reproducible outputs")
     parser.add_argument("--model", choices=("ridge", "xgboost"), default="ridge")
     parser.add_argument("--train-days", type=int, default=504)
@@ -68,8 +70,9 @@ def main() -> None:
             "rebalance_frequency": "weekly",
             "label_horizon_days": 5,
             "embargo_days": 5,
+            "fundamentals": str(arguments.fundamentals) if arguments.fundamentals else None,
         },
-        input_paths={"panel": arguments.panel, "benchmark": arguments.benchmark},
+        input_paths={name: path for name, path in {"panel": arguments.panel, "benchmark": arguments.benchmark, "fundamentals": arguments.fundamentals}.items() if path is not None},
         repository=Path(__file__).resolve().parent,
     )
     raw_panel = read_table(arguments.panel)
@@ -77,10 +80,16 @@ def main() -> None:
         raise ValueError("The panel must include a point-in-time 'sector' classification for sector-neutral portfolios.")
     panel = construct_universe(raw_panel)
     labeled = add_residual_return_target(panel, read_table(arguments.benchmark))
+    if arguments.fundamentals:
+        labeled = add_fundamental_features(align_fundamentals_asof(labeled, read_table(arguments.fundamentals)))
     featured = build_technical_signal_library(add_features(labeled))
     for signal in TECHNICAL_SIGNAL_COLUMNS:
         featured[f"{signal}_neutral"] = neutralize_signal(featured, signal)
     feature_columns = [f"{feature}_zscore" for feature in RAW_FEATURE_COLUMNS]
+    available_fundamentals = [column for column in FUNDAMENTAL_FEATURE_COLUMNS if column in featured.columns]
+    if available_fundamentals:
+        featured = add_cross_sectional_transforms(featured, available_fundamentals)
+        feature_columns.extend(f"{column}_zscore" for column in available_fundamentals)
     signal_columns = [*TECHNICAL_SIGNAL_COLUMNS, *[f"{signal}_neutral" for signal in TECHNICAL_SIGNAL_COLUMNS]]
     signal_library_summary(featured, signal_columns).to_csv(arguments.output / "signal_library_summary.csv", index=False)
     average_cross_sectional_signal_correlation(featured, signal_columns).to_csv(arguments.output / "signal_correlation.csv")

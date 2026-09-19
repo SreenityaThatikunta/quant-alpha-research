@@ -47,6 +47,27 @@ python run_research.py \
 
 The runner writes the labeled panel, out-of-sample predictions, portfolio weights, daily IC, exposure diagnostics, backtest, and summary to the requested output folder. Raw and generated data are intentionally excluded from version control.
 
+## Add point-in-time SEC fundamentals
+
+The optional SEC EDGAR XBRL path adds filing-timestamped fundamentals to the
+public-price baseline. It uses a conservative next-business-day availability
+lag; provide an identifying contact string when retrieving SEC data.
+
+```bash
+python download_fundamentals.py \
+  --tickers AAPL,MSFT,NVDA \
+  --user-agent "Your Name your-email@example.com" \
+  --output data/raw/sec_fundamentals.parquet
+```
+
+Before supplying `--fundamentals`, add the SEC `cik` identifier to every price
+panel row. The research runner performs an as-of merge, so a filing is never
+available before its recorded availability date. It then creates accounting
+features such as return on assets, cash-flow-to-assets, equity-to-assets, and
+asset growth, and cross-sectionally normalizes them alongside technical inputs.
+This improves feature breadth but does not remove the current-constituent and
+delisting limitations of the public-price universe.
+
 ## Project layout
 
 - `src/`: data validation, labels, features, walk-forward models, portfolio construction, backtesting, and metrics.
