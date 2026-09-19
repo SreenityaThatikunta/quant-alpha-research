@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import gzip
 from collections.abc import Mapping
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -29,7 +30,10 @@ def fetch_sec_json(url: str, user_agent: str, timeout_seconds: int = 30) -> dict
         raise ValueError("Provide an identifying SEC User-Agent, for example 'Name contact@example.com'.")
     request = Request(url, headers={"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"})
     with urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310
-        return json.loads(response.read().decode("utf-8"))
+        content = response.read()
+        if response.headers.get("Content-Encoding", "").lower() == "gzip":
+            content = gzip.decompress(content)
+        return json.loads(content.decode("utf-8"))
 
 
 def ticker_cik_map(payload: Mapping[str, object]) -> dict[str, int]:
