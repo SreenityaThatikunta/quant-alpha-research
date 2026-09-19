@@ -13,7 +13,9 @@ from src.fundamentals import SEC_COMPANY_FACTS_URL, SEC_COMPANY_TICKERS_URL, com
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Download SEC XBRL facts with conservative availability timestamps.")
-    parser.add_argument("--tickers", required=True, help="Comma-separated US tickers, for example AAPL,MSFT,NVDA")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--tickers", help="Comma-separated US tickers, for example AAPL,MSFT,NVDA")
+    source.add_argument("--tickers-file", type=Path, help="CSV containing a ticker column, such as the price-universe snapshot")
     parser.add_argument("--user-agent", required=True, help="Identifying contact string required for responsible SEC access")
     parser.add_argument("--output", type=Path, required=True, help="Output Parquet path")
     parser.add_argument("--availability-lag-days", type=int, default=1)
@@ -22,9 +24,10 @@ def main() -> None:
     if not 0 < arguments.requests_per_second <= 10:
         raise ValueError("requests-per-second must be in (0, 10] to respect SEC fair-access guidance")
     mapping = ticker_cik_map(fetch_sec_json(SEC_COMPANY_TICKERS_URL, arguments.user_agent))
+    tickers = arguments.tickers.split(",") if arguments.tickers else pd.read_csv(arguments.tickers_file)["ticker"].tolist()
     frames = []
     unresolved = []
-    for ticker in (item.strip().upper() for item in arguments.tickers.split(",") if item.strip()):
+    for ticker in (str(item).strip().upper() for item in tickers if str(item).strip()):
         if ticker not in mapping:
             unresolved.append(ticker)
             continue
