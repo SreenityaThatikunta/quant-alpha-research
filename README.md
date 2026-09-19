@@ -68,6 +68,19 @@ asset growth, and cross-sectionally normalizes them alongside technical inputs.
 This improves feature breadth but does not remove the current-constituent and
 delisting limitations of the public-price universe.
 
+## Add public factor-risk data
+
+Download the official daily Fama–French five-factor series for risk attribution
+and factor-neutrality research:
+
+```bash
+python download_factors.py --output data/raw/fama_french_5_daily.parquet
+```
+
+Factor attribution requires factor returns aggregated to the same holding
+period as the portfolio return; the code intentionally refuses to infer that
+aggregation automatically.
+
 ## Project layout
 
 - `src/`: data validation, labels, features, walk-forward models, portfolio construction, backtesting, and metrics.
