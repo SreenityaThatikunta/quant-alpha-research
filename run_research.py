@@ -20,6 +20,7 @@ from src.features import RAW_FEATURE_COLUMNS, add_features
 from src.metrics import deflated_sharpe_ratio, performance_metrics, prediction_metrics
 from src.models import walk_forward_predictions
 from src.portfolio import construct_optimized_portfolios, construct_portfolio, exposure_diagnostics
+from src.signals import TECHNICAL_SIGNAL_COLUMNS, build_technical_signal_library, neutralize_signal
 from src.targets import add_residual_return_target
 
 
@@ -76,10 +77,13 @@ def main() -> None:
         raise ValueError("The panel must include a point-in-time 'sector' classification for sector-neutral portfolios.")
     panel = construct_universe(raw_panel)
     labeled = add_residual_return_target(panel, read_table(arguments.benchmark))
-    featured = add_features(labeled)
+    featured = build_technical_signal_library(add_features(labeled))
+    for signal in TECHNICAL_SIGNAL_COLUMNS:
+        featured[f"{signal}_neutral"] = neutralize_signal(featured, signal)
     feature_columns = [f"{feature}_zscore" for feature in RAW_FEATURE_COLUMNS]
-    signal_library_summary(featured, feature_columns).to_csv(arguments.output / "signal_library_summary.csv", index=False)
-    average_cross_sectional_signal_correlation(featured, feature_columns).to_csv(arguments.output / "signal_correlation.csv")
+    signal_columns = [*TECHNICAL_SIGNAL_COLUMNS, *[f"{signal}_neutral" for signal in TECHNICAL_SIGNAL_COLUMNS]]
+    signal_library_summary(featured, signal_columns).to_csv(arguments.output / "signal_library_summary.csv", index=False)
+    average_cross_sectional_signal_correlation(featured, signal_columns).to_csv(arguments.output / "signal_correlation.csv")
     eligible = featured.loc[featured["eligible"]].copy()
     predictions = walk_forward_predictions(
         eligible, feature_columns, model_name=arguments.model,
