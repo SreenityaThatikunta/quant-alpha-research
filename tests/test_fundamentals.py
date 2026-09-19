@@ -18,3 +18,11 @@ def test_fundamentals_are_aligned_only_after_availability_date():
     assert pd.isna(aligned.loc[0, "assets"])
     assert aligned.loc[1, "return_on_assets"] == 0.1
     assert aligned.loc[2, "cashflow_to_assets"] == 0.15
+
+
+def test_ticker_alignment_is_available_when_price_panel_has_no_cik():
+    panel = pd.DataFrame({"date": pd.to_datetime(["2024-02-01", "2024-02-02"]), "ticker": ["ABC"] * 2})
+    observations = pd.DataFrame({"ticker": ["ABC"], "feature": ["assets"], "value": [100], "available_date": pd.to_datetime(["2024-02-02"])})
+    aligned = align_fundamentals_asof(panel, observations)
+    assert pd.isna(aligned.loc[0, "assets"])
+    assert aligned.loc[1, "assets"] == 100

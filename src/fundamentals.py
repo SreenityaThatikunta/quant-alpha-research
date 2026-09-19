@@ -80,23 +80,30 @@ def company_facts_observations(payload: Mapping[str, object], cik: int, availabi
 
 def align_fundamentals_asof(panel: pd.DataFrame, observations: pd.DataFrame, cik_column: str = "cik") -> pd.DataFrame:
     """Attach only the most recently available SEC fact to each security/date."""
-    required_panel = {"date", "ticker", cik_column}
-    required_observations = {"cik", "feature", "value", "available_date"}
+    required_panel = {"date", "ticker"}
+    required_observations = {"feature", "value", "available_date"}
     if missing := required_panel.difference(panel.columns):
         raise ValueError(f"Panel missing: {sorted(missing)}")
     if missing := required_observations.difference(observations.columns):
         raise ValueError(f"Fundamental observations missing: {sorted(missing)}")
+    if cik_column in panel.columns and "cik" in observations.columns:
+        entity_column = cik_column
+    elif "ticker" in observations.columns:
+        entity_column = "ticker"
+    else:
+        raise ValueError("Fundamentals must share either a CIK or ticker identifier with the panel")
     work = panel.copy()
     work["date"] = pd.to_datetime(work["date"])
     facts = observations.copy()
     facts["available_date"] = pd.to_datetime(facts["available_date"])
     outputs = []
-    for cik, securities in work.groupby(cik_column, dropna=False):
+    for entity, securities in work.groupby(entity_column, dropna=False):
         security = securities.sort_values("date")
-        if pd.isna(cik):
+        if pd.isna(entity):
             outputs.append(security)
             continue
-        history = facts.loc[facts["cik"] == int(cik)].pivot_table(index="available_date", columns="feature", values="value", aggfunc="last").reset_index().sort_values("available_date")
+        match_value = int(entity) if entity_column == cik_column else str(entity).upper()
+        history = facts.loc[facts[entity_column] == match_value].pivot_table(index="available_date", columns="feature", values="value", aggfunc="last").reset_index().sort_values("available_date")
         if history.empty:
             outputs.append(security)
             continue
