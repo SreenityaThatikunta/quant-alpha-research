@@ -40,6 +40,11 @@ def main() -> None:
     parser.add_argument("--train-days", type=int, default=504)
     parser.add_argument("--test-days", type=int, default=21)
     parser.add_argument("--cost-bps", type=float, default=10.0)
+    parser.add_argument("--cost-model", choices=("flat", "liquidity"), default="flat")
+    parser.add_argument("--half-spread-bps", type=float, default=2.0)
+    parser.add_argument("--impact-coefficient", type=float, default=0.1)
+    parser.add_argument("--portfolio-notional", type=float, default=1_000_000.0)
+    parser.add_argument("--annual-borrow-bps", type=float, default=0.0)
     arguments = parser.parse_args()
 
     arguments.output.mkdir(parents=True, exist_ok=True)
@@ -49,6 +54,11 @@ def main() -> None:
             "train_days": arguments.train_days,
             "test_days": arguments.test_days,
             "cost_bps": arguments.cost_bps,
+            "cost_model": arguments.cost_model,
+            "half_spread_bps": arguments.half_spread_bps,
+            "impact_coefficient": arguments.impact_coefficient,
+            "portfolio_notional": arguments.portfolio_notional,
+            "annual_borrow_bps": arguments.annual_borrow_bps,
             "portfolio_quantile": 0.10,
             "rebalance_frequency": "weekly",
             "label_horizon_days": 5,
@@ -71,13 +81,19 @@ def main() -> None:
         eligible, feature_columns, model_name=arguments.model,
         train_days=arguments.train_days, test_days=arguments.test_days,
     )
-    context = eligible[[column for column in ("date", "ticker", "sector", "beta", "stock_forward_return") if column in eligible]].drop_duplicates(["date", "ticker"])
+    context = eligible[[column for column in ("date", "ticker", "sector", "beta", "stock_forward_return", "dollar_volume_20d", "volatility_20d") if column in eligible]].drop_duplicates(["date", "ticker"])
     predictions = predictions.merge(context, on=["date", "ticker"], how="left", validate="one_to_one")
     predictions = predictions.loc[predictions["date"].isin(weekly_rebalance_dates(predictions["date"]))]
     weights = construct_portfolio(predictions)
     if weights.empty:
         raise RuntimeError("No eligible neutral portfolios were formed. Check universe size, sector/beta coverage, and max-weight settings.")
-    backtest = run_weekly_backtest(weights, predictions, transaction_cost_bps=arguments.cost_bps)
+    backtest = run_weekly_backtest(
+        weights, predictions, transaction_cost_bps=arguments.cost_bps,
+        cost_model=arguments.cost_model, half_spread_bps=arguments.half_spread_bps,
+        impact_coefficient=arguments.impact_coefficient,
+        portfolio_notional=arguments.portfolio_notional,
+        annual_borrow_bps=arguments.annual_borrow_bps,
+    )
     daily_ic, ic_summary = prediction_metrics(predictions)
     performance = performance_metrics(backtest["net_return"]) if not backtest.empty else pd.Series(dtype=float)
     if not backtest.empty:
