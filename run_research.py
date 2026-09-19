@@ -19,7 +19,7 @@ from src.experiments import build_run_manifest, write_run_manifest
 from src.features import RAW_FEATURE_COLUMNS, add_features
 from src.metrics import deflated_sharpe_ratio, performance_metrics, prediction_metrics
 from src.models import walk_forward_predictions
-from src.portfolio import construct_portfolio, exposure_diagnostics
+from src.portfolio import construct_optimized_portfolios, construct_portfolio, exposure_diagnostics
 from src.targets import add_residual_return_target
 
 
@@ -45,6 +45,8 @@ def main() -> None:
     parser.add_argument("--impact-coefficient", type=float, default=0.1)
     parser.add_argument("--portfolio-notional", type=float, default=1_000_000.0)
     parser.add_argument("--annual-borrow-bps", type=float, default=0.0)
+    parser.add_argument("--portfolio-construction", choices=("projection", "optimizer"), default="projection")
+    parser.add_argument("--max-turnover", type=float, default=None)
     arguments = parser.parse_args()
 
     arguments.output.mkdir(parents=True, exist_ok=True)
@@ -59,6 +61,8 @@ def main() -> None:
             "impact_coefficient": arguments.impact_coefficient,
             "portfolio_notional": arguments.portfolio_notional,
             "annual_borrow_bps": arguments.annual_borrow_bps,
+            "portfolio_construction": arguments.portfolio_construction,
+            "max_turnover": arguments.max_turnover,
             "portfolio_quantile": 0.10,
             "rebalance_frequency": "weekly",
             "label_horizon_days": 5,
@@ -84,7 +88,11 @@ def main() -> None:
     context = eligible[[column for column in ("date", "ticker", "sector", "beta", "stock_forward_return", "dollar_volume_20d", "volatility_20d") if column in eligible]].drop_duplicates(["date", "ticker"])
     predictions = predictions.merge(context, on=["date", "ticker"], how="left", validate="one_to_one")
     predictions = predictions.loc[predictions["date"].isin(weekly_rebalance_dates(predictions["date"]))]
-    weights = construct_portfolio(predictions)
+    if arguments.portfolio_construction == "optimizer":
+        weights, optimizer_diagnostics = construct_optimized_portfolios(predictions, max_turnover=arguments.max_turnover)
+        optimizer_diagnostics.to_csv(arguments.output / "optimizer_diagnostics.csv", index=False)
+    else:
+        weights = construct_portfolio(predictions)
     if weights.empty:
         raise RuntimeError("No eligible neutral portfolios were formed. Check universe size, sector/beta coverage, and max-weight settings.")
     backtest = run_weekly_backtest(
