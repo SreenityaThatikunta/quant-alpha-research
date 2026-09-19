@@ -56,6 +56,9 @@ def construct_universe(
     min_price: float = 5.0,
     min_median_dollar_volume: float = 5_000_000,
     lookback_days: int = 20,
+    require_point_in_time_metadata: bool = False,
+    membership_column: str = "in_universe",
+    metadata_available_date_column: str = "metadata_available_date",
 ) -> pd.DataFrame:
     """Add point-in-time eligibility using only data available before each date.
 
@@ -65,6 +68,8 @@ def construct_universe(
     """
     if lookback_days < 1:
         raise ValueError("lookback_days must be at least one")
+    if require_point_in_time_metadata:
+        validate_point_in_time_metadata(panel, membership_column, metadata_available_date_column)
     result = validate_panel(panel)
     # Preserve non-price metadata such as point-in-time sector labels; it is
     # required later for portfolio constraints.
@@ -85,4 +90,32 @@ def construct_universe(
         result.groupby("ticker")["close"].shift(1).ge(min_price)
         & result["median_dollar_volume"].ge(min_median_dollar_volume)
     )
+    if require_point_in_time_metadata:
+        result["eligible"] &= result[membership_column].astype(bool)
     return result
+
+
+def validate_point_in_time_metadata(
+    panel: pd.DataFrame,
+    membership_column: str = "in_universe",
+    metadata_available_date_column: str = "metadata_available_date",
+) -> None:
+    """Reject universe metadata that could have become known after a signal date.
+
+    This check does not turn a vendor feed into survivorship-free data by
+    itself; it makes the source's stated availability explicit and prevents an
+    accidental current-constituent snapshot from being treated as point-in-time
+    history.  Delisting returns and corporate-action methodology remain source
+    level requirements documented in ``reports/data_provenance.md``.
+    """
+    required = {"date", "ticker", membership_column, metadata_available_date_column}
+    if missing := required.difference(panel.columns):
+        raise ValueError(f"Point-in-time panel missing: {sorted(missing)}")
+    metadata_dates = pd.to_datetime(panel[metadata_available_date_column], errors="coerce")
+    signal_dates = pd.to_datetime(panel["date"], errors="coerce")
+    if metadata_dates.isna().any() or signal_dates.isna().any():
+        raise ValueError("Point-in-time metadata dates must be valid timestamps.")
+    if (metadata_dates > signal_dates).any():
+        raise ValueError("Universe metadata is available after its signal date.")
+    if panel[membership_column].isna().any():
+        raise ValueError("Point-in-time universe membership must be explicitly recorded.")
