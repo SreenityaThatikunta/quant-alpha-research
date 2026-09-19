@@ -1,0 +1,76 @@
+"""Run the complete research workflow from versioned input files.
+
+Example:
+    .venv/bin/python run_research.py --panel data/raw/prices.parquet \
+        --benchmark data/raw/spy.parquet --output data/processed/run_001
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import pandas as pd
+
+from src.backtest import run_weekly_backtest, weekly_rebalance_dates
+from src.data import construct_universe
+from src.features import RAW_FEATURE_COLUMNS, add_features
+from src.metrics import performance_metrics, prediction_metrics
+from src.models import walk_forward_predictions
+from src.portfolio import construct_portfolio, exposure_diagnostics
+from src.targets import add_residual_return_target
+
+
+def read_table(path: Path) -> pd.DataFrame:
+    if path.suffix == ".parquet":
+        return pd.read_parquet(path)
+    if path.suffix == ".csv":
+        return pd.read_csv(path)
+    raise ValueError("Inputs must be CSV or Parquet files.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Leakage-safe equity alpha research run.")
+    parser.add_argument("--panel", type=Path, required=True, help="OHLCV panel with date/ticker columns")
+    parser.add_argument("--benchmark", type=Path, required=True, help="Benchmark daily close data")
+    parser.add_argument("--output", type=Path, required=True, help="Directory for reproducible outputs")
+    parser.add_argument("--model", choices=("ridge", "xgboost"), default="ridge")
+    parser.add_argument("--train-days", type=int, default=504)
+    parser.add_argument("--test-days", type=int, default=21)
+    parser.add_argument("--cost-bps", type=float, default=10.0)
+    arguments = parser.parse_args()
+
+    arguments.output.mkdir(parents=True, exist_ok=True)
+    raw_panel = read_table(arguments.panel)
+    if "sector" not in raw_panel:
+        raise ValueError("The panel must include a point-in-time 'sector' classification for sector-neutral portfolios.")
+    panel = construct_universe(raw_panel)
+    labeled = add_residual_return_target(panel, read_table(arguments.benchmark))
+    featured = add_features(labeled)
+    feature_columns = [f"{feature}_zscore" for feature in RAW_FEATURE_COLUMNS]
+    eligible = featured.loc[featured["eligible"]].copy()
+    predictions = walk_forward_predictions(
+        eligible, feature_columns, model_name=arguments.model,
+        train_days=arguments.train_days, test_days=arguments.test_days,
+    )
+    context = eligible[[column for column in ("date", "ticker", "sector", "beta", "stock_forward_return") if column in eligible]].drop_duplicates(["date", "ticker"])
+    predictions = predictions.merge(context, on=["date", "ticker"], how="left", validate="one_to_one")
+    predictions = predictions.loc[predictions["date"].isin(weekly_rebalance_dates(predictions["date"]))]
+    weights = construct_portfolio(predictions)
+    if weights.empty:
+        raise RuntimeError("No eligible neutral portfolios were formed. Check universe size, sector/beta coverage, and max-weight settings.")
+    backtest = run_weekly_backtest(weights, predictions, transaction_cost_bps=arguments.cost_bps)
+    daily_ic, ic_summary = prediction_metrics(predictions)
+    performance = performance_metrics(backtest["net_return"]) if not backtest.empty else pd.Series(dtype=float)
+
+    labeled.to_parquet(arguments.output / "labeled_panel.parquet", index=False)
+    predictions.to_parquet(arguments.output / "oos_predictions.parquet", index=False)
+    weights.to_parquet(arguments.output / "portfolio_weights.parquet", index=False)
+    backtest.to_csv(arguments.output / "backtest.csv", index=False)
+    daily_ic.to_csv(arguments.output / "daily_ic.csv", index=False)
+    exposure_diagnostics(weights).to_csv(arguments.output / "exposures.csv", index=False)
+    pd.concat([ic_summary.rename("value").to_frame().assign(metric=lambda x: x.index), performance.rename("value").to_frame().assign(metric=lambda x: x.index)]).reset_index(drop=True).to_csv(arguments.output / "summary.csv", index=False)
+
+
+if __name__ == "__main__":
+    main()

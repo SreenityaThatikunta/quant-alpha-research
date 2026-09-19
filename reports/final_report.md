@@ -1,0 +1,43 @@
+# Final research report
+
+## Status
+
+Completed baseline run on 19 September 2026. This is an educational, public-data benchmark—not investment advice or a production trading result.
+
+## Methodology
+
+- Universe: liquid US equities screened using trailing median dollar volume and prior-day price.
+- Target: five-trading-day residual return using trailing market beta.
+- Validation: chronological walk-forward folds with a label-overlap embargo.
+- Portfolio: weekly, next-period execution; decile long/short selections with dollar, sector, and beta exposure controls.
+- Costs: turnover-proportional transaction costs reported alongside gross performance.
+
+## Required results
+
+Report only out-of-sample metrics: Pearson/rank IC, IC IR, directional accuracy, annualized return/volatility, Sharpe, drawdown, turnover, gross/net returns, exposure diagnostics, yearly results, and market-regime splits.
+
+## Baseline run: current S&P 500 public-data snapshot
+
+| Item | Result |
+| --- | ---: |
+| Universe | 300 current S&P 500 constituents, liquidity/price screened |
+| Raw observations | 641,074 daily equity-price rows |
+| Model | Ridge regression on cross-sectional technical features |
+| Validation | Expanding walk-forward; 504 training days, 5-day embargo, 252-day test blocks |
+| OOS prediction observations | 101,267 |
+| Mean Pearson IC / rank IC | 0.0130 / 0.0075 |
+| Rank-IC information ratio | 0.0445 |
+| Directional accuracy | 49.90% |
+| Rebalance observations | 154 weekly portfolios, 28 Feb 2020–11 Sep 2026 |
+| Gross annualized return / volatility / Sharpe | 5.18% / 7.48% / 0.69 |
+| Net annualized return / volatility / Sharpe | 1.07% / 7.49% / 0.14 |
+| Net maximum drawdown | -9.13% |
+| Mean one-way weekly turnover | 76.77% |
+| Assumed transaction cost | 10 bps per unit of turnover |
+| Max absolute dollar / beta / sector exposure | < 4e-14 / < 5e-14 / < 7e-15 |
+
+The net result is weak after costs. The correct conclusion is that this baseline does not establish a tradable alpha; future work should compare feature groups, tune only within walk-forward validation, and test sensitivity to costs and selection size.
+
+## Limitations
+
+The run uses a snapshot of **current** S&P 500 members and current sector classifications. It therefore has material survivorship bias and is not a point-in-time constituent backtest. Yahoo Finance is a convenient public adjusted-price source, not an institutional data feed. The project is educational research, not investment advice.
