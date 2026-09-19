@@ -17,8 +17,8 @@ def add_residual_return_target(
     and benchmark forward returns begin on the next trading day and end after
     ``horizon_days`` sessions.
     """
-    required_panel = {"date", "ticker", "close"}
-    required_benchmark = {"date", "close"}
+    required_panel = {"date", "ticker", "open", "close"}
+    required_benchmark = {"date", "open", "close"}
     if missing := required_panel.difference(panel.columns):
         raise ValueError(f"Panel missing: {sorted(missing)}")
     if missing := required_benchmark.difference(benchmark.columns):
@@ -29,15 +29,17 @@ def add_residual_return_target(
     stocks = panel.copy()
     stocks["date"] = pd.to_datetime(stocks["date"])
     stocks = stocks.sort_values(["ticker", "date"])
-    market = benchmark.loc[:, ["date", "close"]].copy().rename(columns={"close": "benchmark_close"})
+    market = benchmark.loc[:, ["date", "open", "close"]].copy().rename(columns={"open": "benchmark_open", "close": "benchmark_close"})
     market["date"] = pd.to_datetime(market["date"])
     market = market.sort_values("date")
     market["benchmark_return_1d"] = market["benchmark_close"].pct_change()
-    market["benchmark_forward_return"] = market["benchmark_close"].shift(-horizon_days).div(market["benchmark_close"]).sub(1)
+    # Signals use the completed signal-date close. Enter at the next session's
+    # open and mark the five-session holding period at its final close.
+    market["benchmark_forward_return"] = market["benchmark_close"].shift(-horizon_days).div(market["benchmark_open"].shift(-1)).sub(1)
 
     merged = stocks.merge(market, on="date", how="left", validate="many_to_one")
     merged["stock_return_1d"] = merged.groupby("ticker")["close"].pct_change()
-    merged["stock_forward_return"] = merged.groupby("ticker")["close"].shift(-horizon_days).div(merged["close"]).sub(1)
+    merged["stock_forward_return"] = merged.groupby("ticker")["close"].shift(-horizon_days).div(merged.groupby("ticker")["open"].shift(-1)).sub(1)
     # Express rolling covariance through rolling moments. ``transform`` keeps
     # the original panel index, avoiding accidental cross-ticker alignment.
     grouped = merged.groupby("ticker")

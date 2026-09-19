@@ -27,5 +27,5 @@ pytest
 
 - Panel key is unique `(date, ticker)`.
 - Eligibility uses trailing median dollar volume and a closing-price floor, shifted one day before use.
-- The target is stock five-day forward return minus trailing-beta times benchmark five-day forward return.
+- The target enters at the next session's open, holds for five sessions, and is the resulting stock return minus trailing-beta times the benchmark return over the same window.
 - Labels are stored separately from input features and are never contemporaneous inputs.
