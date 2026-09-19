@@ -1,6 +1,6 @@
 # Market-Neutral Equity Alpha Research Platform
 
-> Implementation status, 19 September 2026: a public-data Ridge baseline, leakage tests, walk-forward evaluation, and a sector/beta-neutral weekly portfolio are implemented. The documented baseline has weak net performance after transaction costs; this plan remains the roadmap for feature ablations, nonlinear-model comparison, and robustness research.
+> Implementation status, 19 September 2026: a public-data Ridge baseline, leakage tests, walk-forward evaluation, and a sector/beta-neutral weekly portfolio are implemented. The documented baseline has weak net performance after transaction costs. That result remains a benchmark, not an alpha claim: the project is being extended into a statistically disciplined multi-alpha research platform.
 
 ## Objective
 
@@ -13,6 +13,58 @@ Build an end-to-end quantitative research project that predicts next-week **resi
 - **Target:** Forward five-trading-day residual return.
 - **Models:** An interpretable baseline (Ridge or Elastic Net) and one nonlinear model (LightGBM or XGBoost).
 - **Portfolio:** Long top-decile stocks and short bottom-decile stocks, dollar-neutral with sector and market-beta controls.
+
+## Standout research agenda
+
+The objective is not to maximize one backtest statistic. It is to demonstrate a repeatable process for producing a diversified, implementable market-neutral alpha portfolio and for rejecting ideas that do not survive realistic controls.
+
+### 1. Institutional-grade data controls
+
+- Replace the current-constituent snapshot with point-in-time universe membership, sector classifications, corporate actions, and delisting returns when an appropriate source is available.
+- Keep the public-data benchmark as a clearly labelled, survivorship-biased proxy; never compare its output directly with a point-in-time production study.
+- Store source metadata, timestamps, schema validation, and immutable input hashes with every experiment.
+
+### 2. Diversified alpha library
+
+- Research separately motivated signal families: residual momentum, short-horizon reversal, volatility/idiosyncratic-risk, liquidity, fundamentals/earnings revisions, and market-regime-conditioned variants.
+- For every candidate, report coverage, rank IC, IC decay, turnover, exposure, costs, capacity proxy, and correlations to the accepted signal library.
+- Combine only signals that add incremental out-of-sample value after correlation and factor-exposure controls.
+
+### 3. Statistical validation designed to reject false discoveries
+
+- Retain chronological walk-forward evaluation with label-overlap embargoes.
+- Add purged/embargoed cross-validation utilities for tuning and nested evaluation for model selection.
+- Report multiple-testing diagnostics, including deflated Sharpe ratio and probability-of-backtest-overfitting estimates where sample size permits.
+- Require stability tables by year, sector, market-volatility regime, liquidity regime, and sub-universe.
+
+### 4. Risk-aware portfolio optimization
+
+- Replace projection-only weighting with a constrained optimizer that jointly handles gross/net exposure, sector and factor neutrality, beta, position caps, turnover, and liquidity participation.
+- Persist feasibility status, realized constraint residuals, and post-optimization sign changes. A skipped or infeasible portfolio is a result to investigate, never a silently altered portfolio.
+- Extend risk controls from sector/beta to transparent style-factor exposures (size, value, momentum, volatility, and liquidity) when data supports them.
+
+### 5. Execution and capacity economics
+
+- Replace the single flat-cost assumption with a configurable model that can include spread, volatility, dollar volume, participation, borrow, and execution-delay assumptions.
+- Measure forecast decay against delayed execution and show gross/net performance across costs and capacity levels.
+- Separate research return, estimated trading cost, and financing/borrow assumptions in every report.
+
+### 6. Reproducible research operations
+
+- Version experiment parameters, input-data fingerprints, code revision, package versions, and output schemas in a run manifest.
+- Use deterministic configurations and one-command report reproduction.
+- Maintain a compact experiment table that records hypotheses, rejection criteria, OOS results, and the decision to promote, revise, or reject each alpha.
+
+## Milestone acceptance criteria
+
+| Milestone | Evidence required before advancing |
+| --- | --- |
+| Data integrity | Point-in-time source/proxy documented; membership, classifications, and delisting assumptions tested |
+| Alpha research | Per-signal IC/decay/correlation diagnostics and OOS ablations committed |
+| Model selection | Purged nested validation and multiple-testing outputs; no final OOS set used for tuning |
+| Portfolio | Feasible constrained weights with audited risk, turnover, and liquidity constraints |
+| Economics | Cost, delay, and capacity sensitivity results reported net of assumptions |
+| Reproducibility | A run manifest and deterministic command reproduce all published result tables |
 
 ## Repository Structure
 

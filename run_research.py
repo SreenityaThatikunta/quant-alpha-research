@@ -14,6 +14,7 @@ import pandas as pd
 
 from src.backtest import run_weekly_backtest, weekly_rebalance_dates
 from src.data import construct_universe
+from src.experiments import build_run_manifest, write_run_manifest
 from src.features import RAW_FEATURE_COLUMNS, add_features
 from src.metrics import performance_metrics, prediction_metrics
 from src.models import walk_forward_predictions
@@ -41,6 +42,20 @@ def main() -> None:
     arguments = parser.parse_args()
 
     arguments.output.mkdir(parents=True, exist_ok=True)
+    manifest = build_run_manifest(
+        parameters={
+            "model": arguments.model,
+            "train_days": arguments.train_days,
+            "test_days": arguments.test_days,
+            "cost_bps": arguments.cost_bps,
+            "portfolio_quantile": 0.10,
+            "rebalance_frequency": "weekly",
+            "label_horizon_days": 5,
+            "embargo_days": 5,
+        },
+        input_paths={"panel": arguments.panel, "benchmark": arguments.benchmark},
+        repository=Path(__file__).resolve().parent,
+    )
     raw_panel = read_table(arguments.panel)
     if "sector" not in raw_panel:
         raise ValueError("The panel must include a point-in-time 'sector' classification for sector-neutral portfolios.")
@@ -70,6 +85,7 @@ def main() -> None:
     daily_ic.to_csv(arguments.output / "daily_ic.csv", index=False)
     exposure_diagnostics(weights).to_csv(arguments.output / "exposures.csv", index=False)
     pd.concat([ic_summary.rename("value").to_frame().assign(metric=lambda x: x.index), performance.rename("value").to_frame().assign(metric=lambda x: x.index)]).reset_index(drop=True).to_csv(arguments.output / "summary.csv", index=False)
+    write_run_manifest(manifest, arguments.output / "run_manifest.json")
 
 
 if __name__ == "__main__":
