@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 from src.backtest import estimated_transaction_cost, run_weekly_backtest
 
@@ -30,4 +31,4 @@ def test_liquidity_cost_increases_with_participation_and_borrow():
     weights = current.assign(date=date)
     returns = pd.DataFrame({"date": [date, date], "ticker": ["A", "B"], "stock_forward_return": [0.02, -0.02]})
     result = run_weekly_backtest(weights, returns, annual_borrow_bps=52)
-    assert result.loc[0, "borrow_cost"] == 0.00005
+    assert np.isclose(result.loc[0, "borrow_cost"], 0.00005)

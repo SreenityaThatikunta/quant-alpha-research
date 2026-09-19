@@ -48,9 +48,7 @@ def performance_metrics(returns: pd.Series, periods_per_year: int = 52) -> pd.Se
     })
 
 
-def deflated_sharpe_ratio(
-    returns: pd.Series, trials: int = 1, periods_per_year: int = 52
-) -> float:
+def deflated_sharpe_ratio(returns: pd.Series, trials: int = 1) -> float:
     """Estimate the probability that observed Sharpe exceeds selection bias.
 
     This is the Deflated Sharpe Ratio approximation from Bailey and López de
@@ -63,7 +61,9 @@ def deflated_sharpe_ratio(
     volatility = values.std(ddof=1)
     if volatility == 0:
         return float("nan")
-    observed = values.mean() / volatility * np.sqrt(periods_per_year)
+    # The non-normality correction is defined on the single-period Sharpe.
+    # Annualizing here would distort the skew/kurtosis denominator.
+    observed = values.mean() / volatility
     skewness = values.skew()
     excess_kurtosis = values.kurt()
     normal = NormalDist()
