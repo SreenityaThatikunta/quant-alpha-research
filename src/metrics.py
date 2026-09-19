@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from statistics import NormalDist
 
 
 def prediction_metrics(predictions: pd.DataFrame, prediction_column: str = "prediction", target_column: str = "target_residual_return_5d") -> tuple[pd.DataFrame, pd.Series]:
@@ -45,3 +46,37 @@ def performance_metrics(returns: pd.Series, periods_per_year: int = 52) -> pd.Se
         "maximum_drawdown": drawdown.min(),
         "periods": len(returns),
     })
+
+
+def deflated_sharpe_ratio(
+    returns: pd.Series, trials: int = 1, periods_per_year: int = 52
+) -> float:
+    """Estimate the probability that observed Sharpe exceeds selection bias.
+
+    This is the Deflated Sharpe Ratio approximation from Bailey and López de
+    Prado. ``trials`` is the number of materially distinct strategies examined,
+    not the number of parameter combinations logged after the fact.
+    """
+    values = returns.dropna()
+    if len(values) < 4 or trials < 1:
+        return float("nan")
+    volatility = values.std(ddof=1)
+    if volatility == 0:
+        return float("nan")
+    observed = values.mean() / volatility * np.sqrt(periods_per_year)
+    skewness = values.skew()
+    excess_kurtosis = values.kurt()
+    normal = NormalDist()
+    if trials == 1:
+        expected_maximum = 0.0
+    else:
+        euler_gamma = 0.5772156649
+        expected_maximum = (
+            (1 - euler_gamma) * normal.inv_cdf(1 - 1 / trials)
+            + euler_gamma * normal.inv_cdf(1 - 1 / (trials * np.e))
+        )
+    denominator_squared = 1 - skewness * observed + (excess_kurtosis / 4) * observed**2
+    if denominator_squared <= 0:
+        return float("nan")
+    statistic = (observed - expected_maximum) * np.sqrt(len(values) - 1) / np.sqrt(denominator_squared)
+    return normal.cdf(statistic)

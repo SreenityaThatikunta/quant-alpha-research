@@ -14,9 +14,10 @@ import pandas as pd
 
 from src.backtest import run_weekly_backtest, weekly_rebalance_dates
 from src.data import construct_universe
+from src.diagnostics import average_cross_sectional_signal_correlation, signal_library_summary
 from src.experiments import build_run_manifest, write_run_manifest
 from src.features import RAW_FEATURE_COLUMNS, add_features
-from src.metrics import performance_metrics, prediction_metrics
+from src.metrics import deflated_sharpe_ratio, performance_metrics, prediction_metrics
 from src.models import walk_forward_predictions
 from src.portfolio import construct_portfolio, exposure_diagnostics
 from src.targets import add_residual_return_target
@@ -63,6 +64,8 @@ def main() -> None:
     labeled = add_residual_return_target(panel, read_table(arguments.benchmark))
     featured = add_features(labeled)
     feature_columns = [f"{feature}_zscore" for feature in RAW_FEATURE_COLUMNS]
+    signal_library_summary(featured, feature_columns).to_csv(arguments.output / "signal_library_summary.csv", index=False)
+    average_cross_sectional_signal_correlation(featured, feature_columns).to_csv(arguments.output / "signal_correlation.csv")
     eligible = featured.loc[featured["eligible"]].copy()
     predictions = walk_forward_predictions(
         eligible, feature_columns, model_name=arguments.model,
@@ -77,6 +80,8 @@ def main() -> None:
     backtest = run_weekly_backtest(weights, predictions, transaction_cost_bps=arguments.cost_bps)
     daily_ic, ic_summary = prediction_metrics(predictions)
     performance = performance_metrics(backtest["net_return"]) if not backtest.empty else pd.Series(dtype=float)
+    if not backtest.empty:
+        performance.loc["deflated_sharpe_ratio_one_trial"] = deflated_sharpe_ratio(backtest["net_return"])
 
     labeled.to_parquet(arguments.output / "labeled_panel.parquet", index=False)
     predictions.to_parquet(arguments.output / "oos_predictions.parquet", index=False)
