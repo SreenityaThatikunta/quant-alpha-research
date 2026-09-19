@@ -20,7 +20,10 @@ def parse_fama_french_daily_zip(content: bytes) -> pd.DataFrame:
     with zipfile.ZipFile(io.BytesIO(content)) as archive:
         csv_name = next(name for name in archive.namelist() if name.lower().endswith(".csv"))
         lines = archive.read(csv_name).decode("latin-1").splitlines()
-    header_index = next(index for index, line in enumerate(lines) if line.strip().startswith("DATE,"))
+    header_index = next(
+        index for index, line in enumerate(lines)
+        if "Mkt-RF" in line and "SMB" in line and "HML" in line
+    )
     data_lines = []
     for line in lines[header_index:]:
         if not line.strip():
