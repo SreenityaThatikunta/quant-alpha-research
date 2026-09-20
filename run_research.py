@@ -13,6 +13,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.backtest import run_weekly_backtest, weekly_rebalance_dates
+from src.coverage import universe_price_coverage_audit
 from src.data import attach_point_in_time_universe_metadata, construct_universe
 from src.diagnostics import average_cross_sectional_signal_correlation, signal_library_summary
 from src.experiments import build_run_manifest, write_run_manifest
@@ -57,6 +58,7 @@ def main() -> None:
     parser.add_argument("--ridge-alphas", default="1,10,100", help="Pre-specified comma-separated Ridge penalties for nested selection")
     parser.add_argument("--cost-sensitivity-bps", default=None, help="Optional comma-separated flat-cost assumptions")
     parser.add_argument("--notional-sensitivity", default=None, help="Optional comma-separated portfolio notionals")
+    parser.add_argument("--entry-delay-days", type=int, default=1, help="Sessions from signal close to entry open")
     arguments = parser.parse_args()
 
     arguments.output.mkdir(parents=True, exist_ok=True)
@@ -78,6 +80,7 @@ def main() -> None:
             "ridge_alphas": arguments.ridge_alphas if arguments.nested_validation else None,
             "cost_sensitivity_bps": arguments.cost_sensitivity_bps,
             "notional_sensitivity": arguments.notional_sensitivity,
+            "entry_delay_days": arguments.entry_delay_days,
             "portfolio_quantile": 0.10,
             "rebalance_frequency": "weekly",
             "label_horizon_days": 5,
@@ -93,11 +96,15 @@ def main() -> None:
     )
     raw_panel = read_table(arguments.panel)
     if arguments.universe_history:
-        raw_panel = attach_point_in_time_universe_metadata(raw_panel, read_table(arguments.universe_history))
+        universe_history = read_table(arguments.universe_history)
+        universe_price_coverage_audit(universe_history, raw_panel).to_csv(
+            arguments.output / "universe_price_coverage.csv", index=False
+        )
+        raw_panel = attach_point_in_time_universe_metadata(raw_panel, universe_history)
     if "sector" not in raw_panel:
         raise ValueError("The panel must include a point-in-time 'sector' classification for sector-neutral portfolios.")
     panel = construct_universe(raw_panel, require_point_in_time_metadata=arguments.universe_history is not None)
-    labeled = add_residual_return_target(panel, read_table(arguments.benchmark))
+    labeled = add_residual_return_target(panel, read_table(arguments.benchmark), entry_delay_days=arguments.entry_delay_days)
     if arguments.fundamentals:
         labeled = add_fundamental_features(align_fundamentals_asof(labeled, read_table(arguments.fundamentals)))
     featured = build_technical_signal_library(add_features(labeled))

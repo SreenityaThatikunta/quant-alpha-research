@@ -81,6 +81,12 @@ python run_research.py ... --cost-model liquidity \
 This writes `execution_cost_capacity_sensitivity.csv`. It revalues fixed OOS
 weights; it is not another round of signal selection.
 
+Test forecast decay from delayed execution by rerunning the otherwise unchanged
+study with a later entry. For example, `--entry-delay-days 2` enters at the
+second next-session open and holds for the same five sessions. Compare these
+separate pre-specified runs; do not select the delay that produces the best
+result after the fact.
+
 For a point-in-time study, supply a historical membership change log with
 `ticker`, `effective_date`, `metadata_available_date`, `in_universe`, and a
 historical `sector` classification. The runner joins only records available by
@@ -151,6 +157,13 @@ python run_research.py \
 The project records a missing-ticker audit before interpreting performance;
 public price sources can lack fully delisted histories, so this is a
 point-in-time membership proxy—not a claim of fully survivorship-free data.
+
+For a single command that creates the public proxy's membership log, Yahoo
+price panel, benchmark, and missing-price audit, run:
+
+```bash
+python download_pit_data.py --start 2016-01-01 --end 2025-12-31
+```
 
 ## Add public factor-risk data
 
