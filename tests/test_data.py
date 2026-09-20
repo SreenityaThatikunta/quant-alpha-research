@@ -84,3 +84,17 @@ def test_price_only_security_is_explicitly_untradable():
     joined = attach_point_in_time_universe_metadata(panel, history)
     assert joined["in_universe"].tolist() == [False, False]
     assert joined["metadata_available_date"].tolist() == joined["date"].tolist()
+
+
+def test_pre_history_security_dates_are_explicitly_untradable():
+    panel = pd.DataFrame({
+        "date": pd.date_range("2024-01-01", periods=3), "ticker": ["ABC"] * 3,
+        "open": [10] * 3, "high": [10] * 3, "low": [10] * 3,
+        "close": [10] * 3, "volume": [1_000_000] * 3,
+    })
+    history = pd.DataFrame({
+        "ticker": ["ABC"], "effective_date": ["2024-01-03"],
+        "metadata_available_date": ["2024-01-03"], "in_universe": [True],
+    })
+    joined = attach_point_in_time_universe_metadata(panel, history)
+    assert joined["in_universe"].tolist() == [False, False, True]

@@ -178,6 +178,12 @@ def attach_point_in_time_universe_metadata(
             security.sort_values("date"), changes,
             left_on="date", right_on=effective_date_column, by="ticker", direction="backward",
         )
+        # Before the first record, membership is unknown.  It is safer to
+        # exclude those observations than to backfill the later record.
+        missing_membership = joined["in_universe"].isna()
+        if missing_membership.any():
+            joined.loc[missing_membership, "in_universe"] = False
+            joined.loc[missing_membership, available_date_column] = joined.loc[missing_membership, "date"]
         # This guard is redundant for a well-formed history but protects
         # callers that pass a vendor export with an incorrect availability tag.
         known = joined[available_date_column].le(joined["date"])
