@@ -58,7 +58,7 @@ def main() -> None:
     parser.add_argument("--nested-validation", action="store_true", help="Select Ridge regularization only inside each walk-forward training window")
     parser.add_argument("--inner-validation-days", type=int, default=63)
     parser.add_argument("--ridge-alphas", default="1,10,100", help="Pre-specified comma-separated Ridge penalties for nested selection")
-    parser.add_argument("--cost-sensitivity-bps", default=None, help="Optional comma-separated flat-cost assumptions")
+    parser.add_argument("--cost-sensitivity-bps", default=None, help="Optional comma-separated flat-cost assumptions, or half-spread assumptions for --cost-model liquidity")
     parser.add_argument("--notional-sensitivity", default=None, help="Optional comma-separated portfolio notionals")
     parser.add_argument("--entry-delay-days", type=int, default=1, help="Sessions from signal close to entry open")
     arguments = parser.parse_args()

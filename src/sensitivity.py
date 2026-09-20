@@ -26,7 +26,9 @@ def execution_cost_capacity_sensitivity(
     This is a sensitivity analysis, not a new model-selection exercise: the
     forecasts and weights are held fixed. Notional affects the liquidity model
     through participation; it is included for flat costs too so reports make
-    that invariance visible rather than implying a capacity estimate.
+    that invariance visible rather than implying a capacity estimate. For the
+    liquidity model, ``cost_bps_values`` represents half-spread assumptions;
+    for the flat model it represents all-in turnover cost assumptions.
     """
     costs = list(cost_bps_values)
     notionals = list(portfolio_notionals)
@@ -40,7 +42,7 @@ def execution_cost_capacity_sensitivity(
                 realized_returns,
                 transaction_cost_bps=cost_bps,
                 cost_model=cost_model,
-                half_spread_bps=half_spread_bps,
+                half_spread_bps=cost_bps if cost_model == "liquidity" else half_spread_bps,
                 impact_coefficient=impact_coefficient,
                 portfolio_notional=notional,
                 annual_borrow_bps=annual_borrow_bps,
@@ -48,7 +50,8 @@ def execution_cost_capacity_sensitivity(
             metrics = performance_metrics(backtest["net_return"]) if not backtest.empty else pd.Series(dtype=float)
             rows.append({
                 "cost_model": cost_model,
-                "flat_cost_bps": cost_bps,
+                "cost_assumption_bps": cost_bps,
+                "cost_assumption_type": "half_spread" if cost_model == "liquidity" else "flat_turnover_cost",
                 "portfolio_notional": notional,
                 "mean_turnover": backtest["turnover"].mean() if not backtest.empty else float("nan"),
                 "mean_trading_cost": backtest["trading_cost"].mean() if not backtest.empty else float("nan"),
