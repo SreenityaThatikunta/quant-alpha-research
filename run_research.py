@@ -157,6 +157,10 @@ def main() -> None:
         weights = construct_portfolio(predictions)
     if weights.empty:
         raise RuntimeError("No eligible neutral portfolios were formed. Check universe size, sector/beta coverage, and max-weight settings.")
+    # Persist the portfolio artifact before execution accounting.  This makes
+    # an execution-model failure independently diagnosable and keeps the
+    # model/portfolio research result inspectable.
+    weights.to_parquet(arguments.output / "portfolio_weights.parquet", index=False)
     backtest = run_weekly_backtest(
         weights, predictions, transaction_cost_bps=arguments.cost_bps,
         cost_model=arguments.cost_model, half_spread_bps=arguments.half_spread_bps,

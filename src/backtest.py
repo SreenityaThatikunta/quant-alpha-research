@@ -46,7 +46,10 @@ def estimated_transaction_cost(
         raise ValueError("Cost parameters must be non-negative")
     now = current.set_index("ticker").copy()
     previous_weights = pd.Series(dtype=float) if previous is None or previous.empty else previous.set_index("ticker")["weight"]
-    trade_weights = now["weight"].sub(previous_weights, fill_value=0.0)
+    # Compute current names first; exited names are appended separately below.
+    # ``Series.sub(..., fill_value=0)`` would already create the union of both
+    # indexes, which double-counted exits when they were appended again.
+    trade_weights = now["weight"].sub(previous_weights.reindex(now.index, fill_value=0.0), fill_value=0.0)
     if previous is not None and not previous.empty:
         exited = previous.set_index("ticker")["weight"].loc[lambda values: ~values.index.isin(now.index)]
         trade_weights = pd.concat([trade_weights, -exited])

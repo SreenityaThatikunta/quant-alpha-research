@@ -32,3 +32,16 @@ def test_liquidity_cost_increases_with_participation_and_borrow():
     returns = pd.DataFrame({"date": [date, date], "ticker": ["A", "B"], "stock_forward_return": [0.02, -0.02]})
     result = run_weekly_backtest(weights, returns, annual_borrow_bps=52)
     assert np.isclose(result.loc[0, "borrow_cost"], 0.00005)
+
+
+def test_transaction_cost_counts_exited_name_once():
+    previous = pd.DataFrame({"ticker": ["A", "B"], "weight": [0.5, -0.5]})
+    current = pd.DataFrame({
+        "ticker": ["A"], "weight": [1.0],
+        "dollar_volume_20d": [1_000_000.0], "volatility_20d": [0.02],
+    })
+    _, turnover = estimated_transaction_cost(
+        current, previous, cost_model="liquidity", portfolio_notional=100_000,
+    )
+    # Buy 0.5 of A and cover 0.5 of B: 0.5 one-way turnover, not 0.75.
+    assert np.isclose(turnover, 0.5)
