@@ -22,6 +22,7 @@ from src.fundamentals import FUNDAMENTAL_FEATURE_COLUMNS, add_fundamental_featur
 from src.metrics import deflated_sharpe_ratio, performance_metrics, prediction_metrics
 from src.models import nested_walk_forward_predictions, walk_forward_predictions
 from src.portfolio import construct_optimized_portfolios, construct_portfolio, exposure_diagnostics
+from src.risk import aggregate_factors_for_holding_periods, factor_attribution
 from src.signals import TECHNICAL_SIGNAL_COLUMNS, build_technical_signal_library, neutralize_signal
 from src.sensitivity import execution_cost_capacity_sensitivity
 from src.targets import add_residual_return_target
@@ -40,6 +41,7 @@ def main() -> None:
     parser.add_argument("--panel", type=Path, required=True, help="OHLCV panel with date/ticker columns")
     parser.add_argument("--benchmark", type=Path, required=True, help="Benchmark daily close data")
     parser.add_argument("--fundamentals", type=Path, default=None, help="Optional SEC XBRL fact table with CIK-aligned timestamps")
+    parser.add_argument("--factors", type=Path, default=None, help="Optional daily Fama-French factor table for holding-period attribution")
     parser.add_argument("--universe-history", type=Path, default=None, help="Optional point-in-time membership/classification change log")
     parser.add_argument("--output", type=Path, required=True, help="Directory for reproducible outputs")
     parser.add_argument("--model", choices=("ridge", "xgboost"), default="ridge")
@@ -86,11 +88,13 @@ def main() -> None:
             "label_horizon_days": 5,
             "embargo_days": 5,
             "fundamentals": str(arguments.fundamentals) if arguments.fundamentals else None,
+            "factors": str(arguments.factors) if arguments.factors else None,
             "universe_history": str(arguments.universe_history) if arguments.universe_history else None,
         },
         input_paths={name: path for name, path in {
             "panel": arguments.panel, "benchmark": arguments.benchmark,
-            "fundamentals": arguments.fundamentals, "universe_history": arguments.universe_history,
+            "fundamentals": arguments.fundamentals, "factors": arguments.factors,
+            "universe_history": arguments.universe_history,
         }.items() if path is not None},
         repository=Path(__file__).resolve().parent,
     )
@@ -172,6 +176,14 @@ def main() -> None:
             half_spread_bps=arguments.half_spread_bps, impact_coefficient=arguments.impact_coefficient,
             annual_borrow_bps=arguments.annual_borrow_bps,
         ).to_csv(arguments.output / "execution_cost_capacity_sensitivity.csv", index=False)
+    if arguments.factors:
+        holding_period_factors = aggregate_factors_for_holding_periods(
+            read_table(arguments.factors), backtest["date"], entry_delay_days=arguments.entry_delay_days
+        )
+        holding_period_factors.to_csv(arguments.output / "holding_period_factors.csv", index=False)
+        factor_attribution(backtest, holding_period_factors).rename("value").to_frame().assign(
+            metric=lambda frame: frame.index
+        ).reset_index(drop=True).to_csv(arguments.output / "factor_attribution.csv", index=False)
     daily_ic, ic_summary = prediction_metrics(predictions)
     performance = performance_metrics(backtest["net_return"]) if not backtest.empty else pd.Series(dtype=float)
     if not backtest.empty:

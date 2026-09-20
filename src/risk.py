@@ -49,6 +49,38 @@ def write_factor_data(factors: pd.DataFrame, output_path: Path) -> None:
     factors.to_parquet(output_path, index=False)
 
 
+def aggregate_factors_for_holding_periods(
+    factors: pd.DataFrame,
+    signal_dates: pd.Series | pd.DatetimeIndex,
+    horizon_days: int = 5,
+    entry_delay_days: int = 1,
+) -> pd.DataFrame:
+    """Compound daily factors over the exact forward portfolio holding windows."""
+    if horizon_days < 1 or entry_delay_days < 1:
+        raise ValueError("horizon_days and entry_delay_days must be positive")
+    required = {"date", *FAMA_FRENCH_FACTOR_COLUMNS}
+    if missing := required.difference(factors.columns):
+        raise ValueError(f"Factors missing: {sorted(missing)}")
+    daily = factors.loc[:, ["date", *FAMA_FRENCH_FACTOR_COLUMNS]].copy().sort_values("date")
+    daily["date"] = pd.to_datetime(daily["date"])
+    if daily.duplicated("date").any():
+        raise ValueError("Factors contain duplicate dates")
+    index_by_date = {date: index for index, date in enumerate(daily["date"])}
+    rows: list[dict[str, object]] = []
+    for signal_date in pd.DatetimeIndex(pd.to_datetime(signal_dates).unique()):
+        signal_index = index_by_date.get(signal_date)
+        if signal_index is None:
+            continue
+        holding = daily.iloc[signal_index + entry_delay_days: signal_index + entry_delay_days + horizon_days]
+        if len(holding) != horizon_days:
+            continue
+        rows.append({
+            "date": signal_date,
+            **{column: (1 + holding[column]).prod() - 1 for column in FAMA_FRENCH_FACTOR_COLUMNS},
+        })
+    return pd.DataFrame(rows)
+
+
 def factor_attribution(
     returns: pd.DataFrame,
     factors: pd.DataFrame,

@@ -174,9 +174,13 @@ and factor-neutrality research:
 python download_factors.py --output data/raw/fama_french_5_daily.parquet
 ```
 
-Factor attribution requires factor returns aggregated to the same holding
-period as the portfolio return; the code intentionally refuses to infer that
-aggregation automatically.
+Pass the factor file to a research run to compound daily factors over the exact
+next-open holding windows and write `holding_period_factors.csv` plus
+`factor_attribution.csv`:
+
+```bash
+python run_research.py ... --factors data/raw/fama_french_5_daily.parquet
+```
 
 ## Evaluate the transparent alpha library
 
