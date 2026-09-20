@@ -163,7 +163,16 @@ def attach_point_in_time_universe_metadata(
     for ticker, security in prices.groupby("ticker", sort=False):
         changes = source.loc[source["ticker"] == ticker].sort_values(effective_date_column)
         if changes.empty:
-            outputs.append(security.assign(in_universe=pd.NA, metadata_available_date=pd.NaT))
+            # A price-only security is not evidence of index membership.  Keep
+            # it in the audit panel, but make it explicitly untradable rather
+            # than imputing today's classification (a survivorship leak).
+            unknown = security.copy()
+            unknown["in_universe"] = False
+            unknown[available_date_column] = unknown["date"]
+            for column in source.columns:
+                if column not in {"ticker", effective_date_column, available_date_column, "in_universe"}:
+                    unknown[column] = pd.NA
+            outputs.append(unknown)
             continue
         joined = pd.merge_asof(
             security.sort_values("date"), changes,

@@ -69,3 +69,18 @@ def test_point_in_time_history_normalizes_mixed_timestamp_precisions():
     })
     joined = attach_point_in_time_universe_metadata(panel, history)
     assert joined["in_universe"].tolist() == [True, True]
+
+
+def test_price_only_security_is_explicitly_untradable():
+    panel = pd.DataFrame({
+        "date": pd.date_range("2024-01-01", periods=2), "ticker": ["MISSING"] * 2,
+        "open": [10] * 2, "high": [10] * 2, "low": [10] * 2,
+        "close": [10] * 2, "volume": [1_000_000] * 2,
+    })
+    history = pd.DataFrame({
+        "ticker": ["ABC"], "effective_date": ["2023-12-01"],
+        "metadata_available_date": ["2023-12-01"], "in_universe": [True],
+    })
+    joined = attach_point_in_time_universe_metadata(panel, history)
+    assert joined["in_universe"].tolist() == [False, False]
+    assert joined["metadata_available_date"].tolist() == joined["date"].tolist()
