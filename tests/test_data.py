@@ -54,3 +54,18 @@ def test_point_in_time_history_is_joined_as_of_each_signal_date():
     joined = attach_point_in_time_universe_metadata(panel, history)
     assert joined["in_universe"].tolist() == [True, True, False]
     assert joined["sector"].tolist() == ["Technology"] * 3
+
+
+def test_point_in_time_history_normalizes_mixed_timestamp_precisions():
+    panel = pd.DataFrame({
+        "date": pd.Series(pd.date_range("2024-01-01", periods=2)).astype("datetime64[ms]"),
+        "ticker": ["ABC"] * 2, "open": [10] * 2, "high": [10] * 2,
+        "low": [10] * 2, "close": [10] * 2, "volume": [1_000_000] * 2,
+    })
+    history = pd.DataFrame({
+        "ticker": ["ABC"], "effective_date": pd.Series(["2023-12-01"], dtype="datetime64[us]"),
+        "metadata_available_date": pd.Series(["2023-12-01"], dtype="datetime64[us]"),
+        "in_universe": [True],
+    })
+    joined = attach_point_in_time_universe_metadata(panel, history)
+    assert joined["in_universe"].tolist() == [True, True]

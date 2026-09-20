@@ -139,11 +139,20 @@ def attach_point_in_time_universe_metadata(
     history_required = {"ticker", "in_universe", effective_date_column, available_date_column}
     if missing := history_required.difference(history.columns):
         raise ValueError(f"Universe history missing: {sorted(missing)}")
-    prices = validate_panel(panel)
+    prices = validate_panel(panel).copy()
+    # Parquet writers can preserve a millisecond dtype while a CSV/JSON
+    # universe export becomes microsecond or nanosecond precision.  merge_asof
+    # requires an exact dtype match, so canonicalise both keys explicitly.
+    prices["date"] = (
+        pd.to_datetime(prices["date"], errors="coerce")
+        .dt.tz_localize(None)
+        .dt.normalize()
+        .astype("datetime64[ns]")
+    )
     source = history.copy()
     source["ticker"] = source["ticker"].astype(str).str.upper()
-    source[effective_date_column] = pd.to_datetime(source[effective_date_column], errors="coerce").dt.tz_localize(None).dt.normalize()
-    source[available_date_column] = pd.to_datetime(source[available_date_column], errors="coerce").dt.tz_localize(None).dt.normalize()
+    source[effective_date_column] = pd.to_datetime(source[effective_date_column], errors="coerce").dt.tz_localize(None).dt.normalize().astype("datetime64[ns]")
+    source[available_date_column] = pd.to_datetime(source[available_date_column], errors="coerce").dt.tz_localize(None).dt.normalize().astype("datetime64[ns]")
     if source[[effective_date_column, available_date_column]].isna().any().any():
         raise ValueError("Universe history effective and availability dates must be valid.")
     if (source[available_date_column] > source[effective_date_column]).any():
