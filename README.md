@@ -25,6 +25,12 @@ The current public-data Ridge baseline uses 300 current S&P 500 constituents, a 
 
 This weak net baseline does **not** establish a tradable alpha. See [the full report](reports/final_report.md) for methodology, constraints, and limitations.
 
+The repository also contains a completed public point-in-time membership-proxy
+study. Its Ridge forecasts were positive under a low-cost baseline but weakened
+substantially after a two-session execution delay and became negative at more
+conservative spread assumptions. That result is recorded as **rejected**, not
+promoted; see the [decision log](reports/research_decision_log.md).
+
 ## Research decisions and evidence
 
 This repository records negative findings rather than promoting a signal based
@@ -151,7 +157,11 @@ python run_research.py \
   --panel data/raw/sp500_pit_prices.parquet \
   --benchmark data/raw/spy_benchmark.parquet \
   --universe-history data/raw/sp500_pit_universe.parquet \
-  --output data/processed/sp500_pit_proxy
+  --factors data/raw/fama_french_5_daily.parquet \
+  --output data/processed/sp500_pit_proxy \
+  --model ridge --nested-validation --ridge-alphas 1,10,100 --test-days 252 \
+  --cost-model liquidity --cost-sensitivity-bps 5,10,20 \
+  --notional-sensitivity 1000000,5000000,10000000
 ```
 
 The project records a missing-ticker audit before interpreting performance;
