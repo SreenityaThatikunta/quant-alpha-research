@@ -176,11 +176,26 @@ def construct_optimized_portfolios(
         residuals = constraints_matrix.T @ weights
         gross_residual = abs(np.abs(weights).sum() - gross_target)
         turnover = np.abs(weights - prior).sum() / 2
-        feasible = bool(solved.success and np.max(np.abs(residuals)) < 1e-6 and gross_residual < 1e-6 and (max_turnover is None or turnover <= max_turnover + 1e-6))
+        # SLSQP's success flag varies across SciPy versions for this non-smooth
+        # gross-exposure equality.  Feasibility is a mathematical property of
+        # the returned weights, not the optimizer's status text. Keep both
+        # fields: a constraint-satisfying but non-optimal solution is usable
+        # for a baseline comparison, while reports can still flag it for review.
+        tolerance = 1e-6
+        bound_violation = max(0.0, float(np.abs(weights).max() - max_weight))
+        feasible = bool(
+            np.isfinite(weights).all()
+            and np.max(np.abs(residuals)) < tolerance
+            and gross_residual < tolerance
+            and bound_violation < tolerance
+            and (max_turnover is None or turnover <= max_turnover + tolerance)
+        )
         diagnostic_rows.append({
-            "date": date, "feasible": feasible, "status": str(solved.message), "objective": solved.fun,
+            "date": date, "feasible": feasible, "solver_success": bool(solved.success),
+            "status": str(solved.message), "objective": solved.fun,
             "gross": np.abs(weights).sum(), "turnover": turnover,
             "max_abs_constraint_residual": np.max(np.abs(residuals)), "gross_residual": gross_residual,
+            "bound_violation": bound_violation,
             **{f"constraint_{name}": residual for name, residual in zip(constraint_names, residuals, strict=True)},
         })
         if not feasible:

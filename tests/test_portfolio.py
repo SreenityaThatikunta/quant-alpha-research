@@ -41,6 +41,7 @@ def test_optimizer_enforces_neutrality_and_records_feasibility():
         predictions, quantile=0.2, max_weight=0.5, factor_columns=("beta", "size"), risk_aversion=0.1,
     )
     assert diagnostics.loc[0, "feasible"]
+    assert "solver_success" in diagnostics
     assert abs(weights["weight"].sum()) < 1e-6
     assert abs((weights["weight"] * weights["beta"]).sum()) < 1e-6
     assert abs((weights["weight"] * weights["size"]).sum()) < 1e-6
