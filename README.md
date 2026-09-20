@@ -81,6 +81,22 @@ Factor attribution requires factor returns aggregated to the same holding
 period as the portfolio return; the code intentionally refuses to infer that
 aggregation automatically.
 
+## Evaluate the transparent alpha library
+
+Evaluate momentum, reversal, low-risk, liquidity, and their beta/sector-neutral
+versions before combining any candidates:
+
+```bash
+python run_signal_research.py \
+  --panel data/raw/sp500_current_constituents_prices.parquet \
+  --benchmark data/raw/spy_benchmark.parquet \
+  --output data/processed/technical_signal_study
+```
+
+The output separates each signal's rank IC, net backtest, turnover, and
+multiple-testing-aware Sharpe diagnostic. A signal is a research candidate—not
+an accepted alpha—until it survives those independent checks.
+
 ## Project layout
 
 - `src/`: data validation, labels, features, walk-forward models, portfolio construction, backtesting, and metrics.
