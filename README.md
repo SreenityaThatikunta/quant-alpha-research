@@ -60,13 +60,21 @@ python download_fundamentals.py \
   --output data/raw/sec_fundamentals.parquet
 ```
 
-Before supplying `--fundamentals`, add the SEC `cik` identifier to every price
-panel row. The research runner performs an as-of merge, so a filing is never
-available before its recorded availability date. It then creates accounting
+The research runner joins the downloaded facts to the price panel by ticker and
+performs an as-of merge, so a filing is never available before its recorded
+availability date. It then creates accounting
 features such as return on assets, cash-flow-to-assets, equity-to-assets, and
 asset growth, and cross-sectionally normalizes them alongside technical inputs.
 This improves feature breadth but does not remove the current-constituent and
 delisting limitations of the public-price universe.
+
+For a large universe, download bounded batches and store each result separately
+before concatenating the Parquet files:
+
+```bash
+python download_fundamentals.py ... --tickers-file data/raw/sp500_current_constituents_sectors.csv \
+  --offset 0 --limit 25 --output data/raw/sec_fundamentals_000.parquet
+```
 
 ## Add public factor-risk data
 
