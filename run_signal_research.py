@@ -25,16 +25,23 @@ def main() -> None:
     parser.add_argument("--benchmark", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cost-bps", type=float, default=10.0)
+    parser.add_argument("--signals", default=None, help="Comma-separated base signals; defaults to the complete library")
+    parser.add_argument("--include-neutralized", action="store_true", help="Also evaluate beta/sector-neutralized versions")
     arguments = parser.parse_args()
     arguments.output.mkdir(parents=True, exist_ok=True)
 
     labeled = add_residual_return_target(construct_universe(read_table(arguments.panel)), read_table(arguments.benchmark))
     featured = build_technical_signal_library(add_features(labeled))
-    signals = [*TECHNICAL_SIGNAL_COLUMNS]
-    for signal in TECHNICAL_SIGNAL_COLUMNS:
-        neutral = f"{signal}_neutral"
-        featured[neutral] = neutralize_signal(featured, signal)
-        signals.append(neutral)
+    selected = arguments.signals.split(",") if arguments.signals else list(TECHNICAL_SIGNAL_COLUMNS)
+    unknown = set(selected).difference(TECHNICAL_SIGNAL_COLUMNS)
+    if unknown:
+        raise ValueError(f"Unknown base signals: {sorted(unknown)}")
+    signals = list(selected)
+    if arguments.include_neutralized:
+        for signal in selected:
+            neutral = f"{signal}_neutral"
+            featured[neutral] = neutralize_signal(featured, signal)
+            signals.append(neutral)
     summary, backtests = evaluate_signal_library(featured, signals, transaction_cost_bps=arguments.cost_bps)
     summary.to_csv(arguments.output / "signal_backtest_summary.csv", index=False)
     signal_library_summary(featured, signals).to_csv(arguments.output / "signal_ic_summary.csv", index=False)

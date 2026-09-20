@@ -97,6 +97,13 @@ The output separates each signal's rank IC, net backtest, turnover, and
 multiple-testing-aware Sharpe diagnostic. A signal is a research candidate—not
 an accepted alpha—until it survives those independent checks.
 
+For a targeted, resumable run, select an individual candidate (and optionally
+its neutralized version):
+
+```bash
+python run_signal_research.py ... --signals short_horizon_reversal --include-neutralized
+```
+
 ## Project layout
 
 - `src/`: data validation, labels, features, walk-forward models, portfolio construction, backtesting, and metrics.
