@@ -21,7 +21,14 @@ FUNDAMENTAL_CONCEPTS: dict[str, tuple[tuple[str, str, str], ...]] = {
     "operating_cash_flow": (("us-gaap", "NetCashProvidedByUsedInOperatingActivities", "USD"),),
     "shares_outstanding": (("dei", "EntityCommonStockSharesOutstanding", "shares"),),
 }
-FUNDAMENTAL_FEATURE_COLUMNS = ("return_on_assets", "cashflow_to_assets", "equity_to_assets", "asset_growth")
+FUNDAMENTAL_FEATURE_COLUMNS = (
+    "return_on_assets",
+    "cashflow_to_assets",
+    "equity_to_assets",
+    "asset_growth",
+    "accruals_to_assets",
+    "cashflow_to_income",
+)
 
 
 def fetch_sec_json(url: str, user_agent: str, timeout_seconds: int = 30) -> dict[str, object]:
@@ -125,6 +132,14 @@ def add_fundamental_features(panel: pd.DataFrame) -> pd.DataFrame:
         result["cashflow_to_assets"] = result["operating_cash_flow"].div(result["assets"].where(result["assets"].ne(0)))
     if {"equity", "assets"}.issubset(result.columns):
         result["equity_to_assets"] = result["equity"].div(result["assets"].where(result["assets"].ne(0)))
+    if {"net_income", "operating_cash_flow", "assets"}.issubset(result.columns):
+        result["accruals_to_assets"] = (result["net_income"] - result["operating_cash_flow"]).div(
+            result["assets"].where(result["assets"].ne(0))
+        )
+    if {"net_income", "operating_cash_flow"}.issubset(result.columns):
+        result["cashflow_to_income"] = result["operating_cash_flow"].div(
+            result["net_income"].where(result["net_income"].ne(0))
+        )
     if "assets" in result.columns:
         result["asset_growth"] = result.groupby("ticker")["assets"].pct_change(fill_method=None)
     return result

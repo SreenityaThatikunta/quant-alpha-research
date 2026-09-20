@@ -1,7 +1,13 @@
 import numpy as np
 import pandas as pd
 
-from src.diagnostics import average_cross_sectional_signal_correlation, signal_decay, signal_library_summary
+from src.diagnostics import (
+    average_cross_sectional_signal_correlation,
+    grouped_signal_stability,
+    probability_of_backtest_overfitting,
+    signal_decay,
+    signal_library_summary,
+)
 from src.metrics import deflated_sharpe_ratio
 
 
@@ -31,3 +37,15 @@ def test_signal_decay_and_deflated_sharpe_are_reported():
     returns = pd.Series([0.01, -0.002, 0.008, 0.005, -0.003, 0.007])
     assert decay.loc[0, "rank_ic"] == 1.0
     assert 0.0 <= deflated_sharpe_ratio(returns, trials=2) <= 1.0
+
+
+def test_grouped_stability_and_pbo_use_predefined_groups_and_aligned_returns():
+    frame = _signal_frame()
+    frame["year"] = 2024
+    stability = grouped_signal_stability(frame, ["signal_a"], "year", target_column="target")
+    returns = pd.DataFrame({
+        "stable": [0.01, 0.02, 0.01, 0.02, 0.01, 0.02, 0.01, 0.02],
+        "unstable": [0.03, -0.03, 0.03, -0.03, 0.03, -0.03, 0.03, -0.03],
+    })
+    assert stability.loc[0, "mean_rank_ic"] == 1.0
+    assert 0.0 <= probability_of_backtest_overfitting(returns, partitions=4) <= 1.0

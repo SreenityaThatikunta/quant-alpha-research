@@ -6,3 +6,4 @@ scikit-learn>=1.5
 scipy>=1.12
 xgboost>=2.1
 pytest>=8.0
+pitindex @ git+https://github.com/arielNacamulli/pitindex.git@2df030e5c9be7c83cf4b28c3d8597d74d274757e

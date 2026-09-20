@@ -25,6 +25,15 @@ The current public-data Ridge baseline uses 300 current S&P 500 constituents, a 
 
 This weak net baseline does **not** establish a tradable alpha. See [the full report](reports/final_report.md) for methodology, constraints, and limitations.
 
+## Research decisions and evidence
+
+This repository records negative findings rather than promoting a signal based
+on an attractive gross backtest. The current candidates, OOS evidence, and
+promotion/rejection decisions are maintained in the
+[research decision log](reports/research_decision_log.md). The public-data
+baseline remains a survivorship-biased benchmark while the project builds a
+point-in-time universe study.
+
 ## Setup
 
 ```bash
@@ -43,6 +52,46 @@ python run_research.py \
   --benchmark data/raw/spy_benchmark.parquet \
   --output data/processed/sp500_ridge_next_open \
   --model ridge --test-days 252
+```
+
+To select the Ridge penalty without evaluating candidate penalties on the
+outer test blocks, use nested walk-forward selection. The listed penalties
+must be chosen before reviewing the resulting final OOS metrics.
+
+```bash
+python run_research.py \
+  --panel data/raw/sp500_current_constituents_prices.parquet \
+  --benchmark data/raw/spy_benchmark.parquet \
+  --output data/processed/sp500_ridge_nested \
+  --model ridge --nested-validation --ridge-alphas 1,10,100
+```
+
+This writes `nested_model_selections.csv` alongside the ordinary run manifest
+and OOS artifacts. It does not make the current-constituent benchmark
+survivorship-free.
+
+For a fixed OOS portfolio, publish cost/capacity assumptions rather than a
+single cost estimate:
+
+```bash
+python run_research.py ... --cost-model liquidity \
+  --cost-sensitivity-bps 5,10,20 --notional-sensitivity 1000000,5000000,10000000
+```
+
+This writes `execution_cost_capacity_sensitivity.csv`. It revalues fixed OOS
+weights; it is not another round of signal selection.
+
+For a point-in-time study, supply a historical membership change log with
+`ticker`, `effective_date`, `metadata_available_date`, `in_universe`, and a
+historical `sector` classification. The runner joins only records available by
+the signal date and records the source file hash in its manifest:
+
+```bash
+python run_research.py \
+  --panel data/raw/vendor_prices.parquet \
+  --benchmark data/raw/spy_benchmark.parquet \
+  --universe-history data/raw/vendor_universe_history.parquet \
+  --output data/processed/point_in_time_study
 ```
 
 The runner writes the labeled panel, out-of-sample predictions, portfolio weights, daily IC, exposure diagnostics, backtest, and summary to the requested output folder. Raw and generated data are intentionally excluded from version control.
@@ -76,6 +125,33 @@ python download_fundamentals.py ... --tickers-file data/raw/sp500_current_consti
   --offset 0 --limit 25 --output data/raw/sec_fundamentals_000.parquet
 ```
 
+## Build a free point-in-time S&P 500 proxy
+
+The public `pitindex` source reconstructs S&P 500 membership from free public
+records. It is a substantial improvement over using today's constituents, but
+not a replacement for CRSP: its upstream event dates, ticker history, and
+corporate-action coverage are documented limitations. The downloader saves both
+the membership change log and its provenance.
+
+```bash
+python download_pit_universe.py --start 2016-01-01 --end 2025-12-31 \
+  --output data/raw/sp500_pit_universe.parquet
+```
+
+Use the output during a research run:
+
+```bash
+python run_research.py \
+  --panel data/raw/sp500_pit_prices.parquet \
+  --benchmark data/raw/spy_benchmark.parquet \
+  --universe-history data/raw/sp500_pit_universe.parquet \
+  --output data/processed/sp500_pit_proxy
+```
+
+The project records a missing-ticker audit before interpreting performance;
+public price sources can lack fully delisted histories, so this is a
+point-in-time membership proxy—not a claim of fully survivorship-free data.
+
 ## Add public factor-risk data
 
 Download the official daily Fama–French five-factor series for risk attribution
@@ -102,8 +178,14 @@ python run_signal_research.py \
 ```
 
 The output separates each signal's rank IC, net backtest, turnover, and
-multiple-testing-aware Sharpe diagnostic. A signal is a research candidate—not
-an accepted alpha—until it survives those independent checks.
+multiple-testing-aware Sharpe diagnostic, plus rank-IC stability by calendar
+year and sector. A signal is a research candidate—not an accepted alpha—until
+it survives those independent checks.
+
+When two or more candidates have aligned backtests, the runner also writes a
+combinatorially symmetric probability-of-backtest-overfitting diagnostic. It
+is valid only for the pre-specified candidate set recorded in the run manifest;
+it cannot correct for ideas discarded before the run.
 
 For a targeted, resumable run, select an individual candidate (and optionally
 its neutralized version):

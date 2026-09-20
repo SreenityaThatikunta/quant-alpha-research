@@ -18,6 +18,8 @@ def test_fundamentals_are_aligned_only_after_availability_date():
     assert pd.isna(aligned.loc[0, "assets"])
     assert aligned.loc[1, "return_on_assets"] == 0.1
     assert aligned.loc[2, "cashflow_to_assets"] == 0.15
+    assert aligned.loc[2, "accruals_to_assets"] == -0.05
+    assert aligned.loc[2, "cashflow_to_income"] == 1.5
 
 
 def test_ticker_alignment_is_available_when_price_panel_has_no_cik():

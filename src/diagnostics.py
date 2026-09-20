@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -93,3 +94,77 @@ def regime_performance(returns: pd.DataFrame, regime_column: str, return_column:
     result = grouped.agg(observations="count", mean_return="mean", volatility="std").reset_index()
     result["sharpe_per_period"] = result["mean_return"].div(result["volatility"].replace(0, np.nan))
     return result
+
+
+def grouped_signal_stability(
+    frame: pd.DataFrame,
+    signal_columns: Iterable[str],
+    group_column: str,
+    target_column: str = "target_residual_return_5d",
+    minimum_cross_section: int = 5,
+) -> pd.DataFrame:
+    """Report rank-IC stability within pre-defined groups and dates.
+
+    Groups may be calendar years, sectors, or pre-computed liquidity/volatility
+    regimes.  The function calculates an IC in each date/group cross-section
+    before averaging, so a large sector or a long regime cannot dominate the
+    result merely by containing more observations.
+    """
+    signals = list(signal_columns)
+    required = {"date", group_column, target_column, *signals}
+    if missing := required.difference(frame.columns):
+        raise ValueError(f"Frame missing: {sorted(missing)}")
+    rows: list[dict[str, object]] = []
+    for signal in signals:
+        values: list[dict[str, object]] = []
+        for (group, _), daily in frame[["date", group_column, signal, target_column]].dropna(subset=[group_column]).groupby([group_column, "date"]):
+            sample = daily[[signal, target_column]].dropna()
+            if len(sample) >= minimum_cross_section:
+                values.append({group_column: group, "rank_ic": sample.corr(method="spearman").iloc[0, 1]})
+        grouped = pd.DataFrame(values)
+        if grouped.empty:
+            continue
+        for group, result in grouped.groupby(group_column):
+            standard_deviation = result["rank_ic"].std(ddof=1)
+            rows.append({
+                "signal": signal,
+                group_column: group,
+                "mean_rank_ic": result["rank_ic"].mean(),
+                "rank_ic_ir": result["rank_ic"].mean() / standard_deviation if standard_deviation else np.nan,
+                "ic_observations": len(result),
+            })
+    return pd.DataFrame(rows)
+
+
+def probability_of_backtest_overfitting(
+    strategy_returns: pd.DataFrame, partitions: int = 8
+) -> float:
+    """Estimate PBO using contiguous combinatorially symmetric partitions.
+
+    Each column is a pre-specified strategy and each row is one aligned return
+    period.  For every half-partition train/test split, the strategy selected
+    by in-sample mean return is ranked out of sample.  PBO is the fraction of
+    selections that rank at or below the out-of-sample median.  This diagnostic
+    is meaningful only when candidates and trials were recorded before looking
+    at the final result; it does not repair post-hoc research.
+    """
+    cleaned = strategy_returns.dropna(axis=0, how="any")
+    if cleaned.shape[1] < 2:
+        raise ValueError("PBO requires at least two pre-specified strategies.")
+    if partitions < 2 or partitions % 2 or partitions > 16:
+        raise ValueError("partitions must be an even integer from 2 through 16.")
+    if len(cleaned) < partitions:
+        raise ValueError("Not enough aligned return periods for the requested partitions.")
+    blocks = [block for block in np.array_split(np.arange(len(cleaned)), partitions) if len(block)]
+    if len(blocks) != partitions:
+        raise ValueError("Not enough return periods for non-empty partitions.")
+    half = partitions // 2
+    below_median: list[bool] = []
+    for train_block_indexes in combinations(range(partitions), half):
+        train_index = np.concatenate([blocks[index] for index in train_block_indexes])
+        test_index = np.concatenate([blocks[index] for index in range(partitions) if index not in train_block_indexes])
+        selected = cleaned.iloc[train_index].mean().idxmax()
+        test_scores = cleaned.iloc[test_index].mean().rank(method="average", ascending=True)
+        selected_percentile = test_scores[selected] / len(test_scores)
+        below_median.append(selected_percentile <= 0.5)
+    return float(np.mean(below_median))

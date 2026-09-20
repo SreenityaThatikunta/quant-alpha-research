@@ -119,3 +119,57 @@ def validate_point_in_time_metadata(
         raise ValueError("Universe metadata is available after its signal date.")
     if panel[membership_column].isna().any():
         raise ValueError("Point-in-time universe membership must be explicitly recorded.")
+
+
+def attach_point_in_time_universe_metadata(
+    panel: pd.DataFrame,
+    history: pd.DataFrame,
+    effective_date_column: str = "effective_date",
+    available_date_column: str = "metadata_available_date",
+) -> pd.DataFrame:
+    """Attach the latest *already available* membership record to each price row.
+
+    ``history`` is a vendor-agnostic change log, not a current-constituent
+    snapshot. Each row states a ticker's membership and classifications from
+    ``effective_date`` onward and the first date on which that record was
+    available to the researcher.  The as-of join deliberately refuses records
+    whose availability is after a signal date. Delisting returns and the
+    vendor's corporate-action methodology must still be evaluated separately.
+    """
+    history_required = {"ticker", "in_universe", effective_date_column, available_date_column}
+    if missing := history_required.difference(history.columns):
+        raise ValueError(f"Universe history missing: {sorted(missing)}")
+    prices = validate_panel(panel)
+    source = history.copy()
+    source["ticker"] = source["ticker"].astype(str).str.upper()
+    source[effective_date_column] = pd.to_datetime(source[effective_date_column], errors="coerce").dt.tz_localize(None).dt.normalize()
+    source[available_date_column] = pd.to_datetime(source[available_date_column], errors="coerce").dt.tz_localize(None).dt.normalize()
+    if source[[effective_date_column, available_date_column]].isna().any().any():
+        raise ValueError("Universe history effective and availability dates must be valid.")
+    if (source[available_date_column] > source[effective_date_column]).any():
+        raise ValueError("Universe history cannot be known after its effective date.")
+    if source.duplicated(["ticker", effective_date_column]).any():
+        raise ValueError("Universe history contains duplicate ticker/effective-date records.")
+    outputs: list[pd.DataFrame] = []
+    for ticker, security in prices.groupby("ticker", sort=False):
+        changes = source.loc[source["ticker"] == ticker].sort_values(effective_date_column)
+        if changes.empty:
+            outputs.append(security.assign(in_universe=pd.NA, metadata_available_date=pd.NaT))
+            continue
+        joined = pd.merge_asof(
+            security.sort_values("date"), changes,
+            left_on="date", right_on=effective_date_column, by="ticker", direction="backward",
+        )
+        # This guard is redundant for a well-formed history but protects
+        # callers that pass a vendor export with an incorrect availability tag.
+        known = joined[available_date_column].le(joined["date"])
+        metadata_columns = [column for column in changes.columns if column not in {"ticker", effective_date_column}]
+        if (~known).any():
+            for column in metadata_columns:
+                # Native numpy bool columns cannot represent missing values.
+                # The nullable dtype preserves an explicit unknown membership.
+                values = joined[column].astype("boolean") if joined[column].dtype == bool else joined[column]
+                joined[column] = values.where(known, pd.NA)
+        joined = joined.drop(columns=effective_date_column)
+        outputs.append(joined)
+    return pd.concat(outputs, ignore_index=True).sort_values(["ticker", "date"]).reset_index(drop=True)

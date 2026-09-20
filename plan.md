@@ -251,3 +251,130 @@ Only use numerical outcomes after validating them out of sample. A final bullet 
 - Optimize portfolio weights with constrained convex optimization.
 - Add alternative data only if its timestamping and licensing are well documented.
 - Package the backtest as a small Streamlit dashboard for inspecting signals, exposures, and performance.
+
+## Resume-Standout Build Plan
+
+The public-data Ridge run is retained as a clearly labelled **benchmark**. It
+is not evidence of deployable alpha: it uses a current-constituent universe
+and its gross performance does not survive the stated costs. The work below is
+ordered by research credibility, rather than by the likelihood of producing a
+more attractive backtest.
+
+### 1. Point-in-time data and universe controls — highest priority
+
+**Objective:** Make the investable universe, sector classifications, corporate
+actions, and delisting treatment contemporaneous with each signal date.
+
+- Evaluate a licensed point-in-time source; until then, preserve the current
+  S&P 500 snapshot only as a survivorship-biased public-data benchmark.
+- Persist source, retrieval time, availability timestamp, schema, and input
+  fingerprint for every raw data artifact.
+- Add tests for historical membership, delisting handling, and as-of joins.
+- Publish a data-coverage report that distinguishes observed values from
+  unavailable values; never forward-fill facts across an availability date.
+
+**Acceptance evidence:** a point-in-time/proxy data note, tested membership
+and availability rules, and a separately reported historical-universe study.
+
+### 2. Alpha research scoreboard and decision log
+
+**Objective:** Treat each candidate as a falsifiable research hypothesis.
+
+- Maintain a version-controlled decision log with hypothesis, information set,
+  universe, validation window, rank IC, IC decay, turnover, net Sharpe,
+  capacity proxy, correlation to the accepted library, and promotion decision.
+- Require an explicit decision: `promote`, `hold`, `revise`, `reject`, or
+  `invalid`; no candidate is combined because of a single aggregate result.
+- Report stability by year, sector, volatility regime, liquidity regime, and
+  sub-universe.
+
+**Acceptance evidence:** a committed, auditable log and one report table per
+candidate family.
+
+### 3. Nested purged model selection and false-discovery controls
+
+**Objective:** Prevent tuning and feature selection from contaminating the
+final OOS estimate.
+
+- Add purged, embargoed folds inside each walk-forward training window for
+  hyperparameter and feature-group selection.
+- Reserve a final untouched chronological test interval for each study.
+- Report Deflated Sharpe Ratio, a probability-of-backtest-overfitting
+  diagnostic where sample size supports it, and the number of materially
+  distinct trials.
+- Pre-register the next candidate and its rejection thresholds in the decision
+  log before inspecting the final OOS result.
+
+**Acceptance evidence:** fold diagrams, nested-run manifests, and an OOS-only
+model comparison table.
+
+### 4. Auditable constrained portfolio optimization
+
+**Objective:** Move from projection-only weights to a transparent constrained
+optimization baseline.
+
+- Formulate long/short, gross/net, position-cap, turnover, liquidity,
+  sector, beta, and style-factor constraints explicitly in a convex solver.
+- Record solver status, feasibility, exact constraint residuals, turnover, and
+  sign changes; skipped dates are research outputs, never silently repaired.
+- Compare optimized weights against the projection baseline on identical OOS
+  predictions and cost assumptions.
+
+**Acceptance evidence:** a reproducible optimizer comparison and diagnostics
+for every rebalance date.
+
+### 5. Execution, borrowing, and capacity economics
+
+**Objective:** Test whether a forecast survives a defensible approximation of
+implementation.
+
+- Expand flat costs into documented spread, volatility, ADV, participation,
+  delay, and borrow-cost assumptions.
+- Measure forecast decay under delayed execution and publish cost × delay ×
+  notional sensitivity tables.
+- Keep research return, trading cost, and financing/borrow cost separate in
+  all reports.
+
+**Acceptance evidence:** a capacity/cost sensitivity artifact and clear
+assumption labels on every performance statistic.
+
+### 6. Distinct, filing-timestamped information sets
+
+**Objective:** Add economically motivated signals that are not another
+variation of historical prices.
+
+- Extend the SEC pipeline with accruals, asset growth, profitability, cash-flow
+  quality, and conservative availability rules based on filing timestamps.
+- Research residual momentum/reversal only after controlling for market and
+  style exposures; evaluate all signals independently before combination.
+- Combine candidates only when they add incremental OOS value and have low
+  correlation with the existing library.
+
+**Acceptance evidence:** a fundamental-signal study with availability tests,
+incremental-IC analysis, and an explicit promote/reject decision.
+
+### 7. Reviewer-ready reproducibility and presentation
+
+**Objective:** Let a recruiter or researcher understand and verify the work in
+five minutes.
+
+- Commit small result artifacts: net/gross equity curve, IC distribution and
+  decay, exposure/turnover diagnostics, decision log, and data provenance.
+- Provide a one-command small-data demonstration while keeping large raw data
+  outside version control.
+- Add continuous integration for tests and static checks; pin project tooling
+  and make experiment manifests part of every runner.
+- Keep the README result headline honest: this is a rigorous benchmark and
+  research platform, not a claim of live tradable alpha.
+
+**Acceptance evidence:** green CI, reproducible demo output, and a concise
+README that links directly to the published research artifacts.
+
+## Build Order
+
+| Sprint | Work | Deliverable |
+| --- | --- | --- |
+| 1 | Decision log, run manifests for all studies, CI, published artifacts | Auditable research operations |
+| 2 | Purged nested validation and stability diagnostics | OOS model-selection report |
+| 3 | Convex optimizer and execution/capacity sensitivity | Portfolio economics report |
+| 4 | Point-in-time universe and filing-timestamped fundamentals | Distinct information-set study |

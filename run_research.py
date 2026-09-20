@@ -13,15 +13,16 @@ from pathlib import Path
 import pandas as pd
 
 from src.backtest import run_weekly_backtest, weekly_rebalance_dates
-from src.data import construct_universe
+from src.data import attach_point_in_time_universe_metadata, construct_universe
 from src.diagnostics import average_cross_sectional_signal_correlation, signal_library_summary
 from src.experiments import build_run_manifest, write_run_manifest
 from src.features import RAW_FEATURE_COLUMNS, add_cross_sectional_transforms, add_features
 from src.fundamentals import FUNDAMENTAL_FEATURE_COLUMNS, add_fundamental_features, align_fundamentals_asof
 from src.metrics import deflated_sharpe_ratio, performance_metrics, prediction_metrics
-from src.models import walk_forward_predictions
+from src.models import nested_walk_forward_predictions, walk_forward_predictions
 from src.portfolio import construct_optimized_portfolios, construct_portfolio, exposure_diagnostics
 from src.signals import TECHNICAL_SIGNAL_COLUMNS, build_technical_signal_library, neutralize_signal
+from src.sensitivity import execution_cost_capacity_sensitivity
 from src.targets import add_residual_return_target
 
 
@@ -38,6 +39,7 @@ def main() -> None:
     parser.add_argument("--panel", type=Path, required=True, help="OHLCV panel with date/ticker columns")
     parser.add_argument("--benchmark", type=Path, required=True, help="Benchmark daily close data")
     parser.add_argument("--fundamentals", type=Path, default=None, help="Optional SEC XBRL fact table with CIK-aligned timestamps")
+    parser.add_argument("--universe-history", type=Path, default=None, help="Optional point-in-time membership/classification change log")
     parser.add_argument("--output", type=Path, required=True, help="Directory for reproducible outputs")
     parser.add_argument("--model", choices=("ridge", "xgboost"), default="ridge")
     parser.add_argument("--train-days", type=int, default=504)
@@ -50,6 +52,11 @@ def main() -> None:
     parser.add_argument("--annual-borrow-bps", type=float, default=0.0)
     parser.add_argument("--portfolio-construction", choices=("projection", "optimizer"), default="projection")
     parser.add_argument("--max-turnover", type=float, default=None)
+    parser.add_argument("--nested-validation", action="store_true", help="Select Ridge regularization only inside each walk-forward training window")
+    parser.add_argument("--inner-validation-days", type=int, default=63)
+    parser.add_argument("--ridge-alphas", default="1,10,100", help="Pre-specified comma-separated Ridge penalties for nested selection")
+    parser.add_argument("--cost-sensitivity-bps", default=None, help="Optional comma-separated flat-cost assumptions")
+    parser.add_argument("--notional-sensitivity", default=None, help="Optional comma-separated portfolio notionals")
     arguments = parser.parse_args()
 
     arguments.output.mkdir(parents=True, exist_ok=True)
@@ -66,19 +73,30 @@ def main() -> None:
             "annual_borrow_bps": arguments.annual_borrow_bps,
             "portfolio_construction": arguments.portfolio_construction,
             "max_turnover": arguments.max_turnover,
+            "nested_validation": arguments.nested_validation,
+            "inner_validation_days": arguments.inner_validation_days if arguments.nested_validation else None,
+            "ridge_alphas": arguments.ridge_alphas if arguments.nested_validation else None,
+            "cost_sensitivity_bps": arguments.cost_sensitivity_bps,
+            "notional_sensitivity": arguments.notional_sensitivity,
             "portfolio_quantile": 0.10,
             "rebalance_frequency": "weekly",
             "label_horizon_days": 5,
             "embargo_days": 5,
             "fundamentals": str(arguments.fundamentals) if arguments.fundamentals else None,
+            "universe_history": str(arguments.universe_history) if arguments.universe_history else None,
         },
-        input_paths={name: path for name, path in {"panel": arguments.panel, "benchmark": arguments.benchmark, "fundamentals": arguments.fundamentals}.items() if path is not None},
+        input_paths={name: path for name, path in {
+            "panel": arguments.panel, "benchmark": arguments.benchmark,
+            "fundamentals": arguments.fundamentals, "universe_history": arguments.universe_history,
+        }.items() if path is not None},
         repository=Path(__file__).resolve().parent,
     )
     raw_panel = read_table(arguments.panel)
+    if arguments.universe_history:
+        raw_panel = attach_point_in_time_universe_metadata(raw_panel, read_table(arguments.universe_history))
     if "sector" not in raw_panel:
         raise ValueError("The panel must include a point-in-time 'sector' classification for sector-neutral portfolios.")
-    panel = construct_universe(raw_panel)
+    panel = construct_universe(raw_panel, require_point_in_time_metadata=arguments.universe_history is not None)
     labeled = add_residual_return_target(panel, read_table(arguments.benchmark))
     if arguments.fundamentals:
         labeled = add_fundamental_features(align_fundamentals_asof(labeled, read_table(arguments.fundamentals)))
@@ -94,10 +112,30 @@ def main() -> None:
     signal_library_summary(featured, signal_columns).to_csv(arguments.output / "signal_library_summary.csv", index=False)
     average_cross_sectional_signal_correlation(featured, signal_columns).to_csv(arguments.output / "signal_correlation.csv")
     eligible = featured.loc[featured["eligible"]].copy()
-    predictions = walk_forward_predictions(
-        eligible, feature_columns, model_name=arguments.model,
-        train_days=arguments.train_days, test_days=arguments.test_days,
-    )
+    if arguments.nested_validation:
+        if arguments.model != "ridge":
+            raise ValueError("Nested selection currently supports the pre-specified Ridge candidate set only.")
+        try:
+            ridge_alphas = [float(value) for value in arguments.ridge_alphas.split(",")]
+        except ValueError as error:
+            raise ValueError("--ridge-alphas must be comma-separated numbers.") from error
+        if not ridge_alphas or any(value <= 0 for value in ridge_alphas):
+            raise ValueError("--ridge-alphas must contain positive values.")
+        candidates = {
+            f"ridge_alpha_{alpha:g}": {"model_name": "ridge", "model_parameters": {"alpha": alpha}}
+            for alpha in ridge_alphas
+        }
+        predictions, selections = nested_walk_forward_predictions(
+            eligible, feature_columns, candidates=candidates, train_days=arguments.train_days,
+            test_days=arguments.test_days, embargo_days=5,
+            inner_validation_days=arguments.inner_validation_days,
+        )
+        selections.to_csv(arguments.output / "nested_model_selections.csv", index=False)
+    else:
+        predictions = walk_forward_predictions(
+            eligible, feature_columns, model_name=arguments.model,
+            train_days=arguments.train_days, test_days=arguments.test_days,
+        )
     context = eligible[[column for column in ("date", "ticker", "sector", "beta", "stock_forward_return", "dollar_volume_20d", "volatility_20d") if column in eligible]].drop_duplicates(["date", "ticker"])
     predictions = predictions.merge(context, on=["date", "ticker"], how="left", validate="one_to_one")
     predictions = predictions.loc[predictions["date"].isin(weekly_rebalance_dates(predictions["date"]))]
@@ -115,6 +153,18 @@ def main() -> None:
         portfolio_notional=arguments.portfolio_notional,
         annual_borrow_bps=arguments.annual_borrow_bps,
     )
+    if arguments.cost_sensitivity_bps or arguments.notional_sensitivity:
+        try:
+            sensitivity_costs = [float(value) for value in (arguments.cost_sensitivity_bps or str(arguments.cost_bps)).split(",")]
+            sensitivity_notionals = [float(value) for value in (arguments.notional_sensitivity or str(arguments.portfolio_notional)).split(",")]
+        except ValueError as error:
+            raise ValueError("Sensitivity arguments must be comma-separated numbers.") from error
+        execution_cost_capacity_sensitivity(
+            weights, predictions, cost_model=arguments.cost_model,
+            cost_bps_values=sensitivity_costs, portfolio_notionals=sensitivity_notionals,
+            half_spread_bps=arguments.half_spread_bps, impact_coefficient=arguments.impact_coefficient,
+            annual_borrow_bps=arguments.annual_borrow_bps,
+        ).to_csv(arguments.output / "execution_cost_capacity_sensitivity.csv", index=False)
     daily_ic, ic_summary = prediction_metrics(predictions)
     performance = performance_metrics(backtest["net_return"]) if not backtest.empty else pd.Series(dtype=float)
     if not backtest.empty:
