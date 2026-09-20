@@ -152,11 +152,16 @@ def construct_optimized_portfolios(
         score_scale = np.std(scores)
         scores = scores / score_scale if score_scale else scores
         prior = previous.reindex(daily["ticker"], fill_value=0.0).to_numpy(dtype=float)
-        initial = _neutralize(
-            pd.Series(np.where(daily[prediction_column].rank(method="first", ascending=False) <= names_per_leg, 1.0, -1.0)),
-            daily[sector_column] if sector_column in daily else None,
-            daily[factor_columns[0]] if len(factor_columns) == 1 else None,
-        ).to_numpy()
+        raw_initial = np.where(
+            daily[prediction_column].rank(method="first", ascending=False) <= names_per_leg, 1.0, -1.0
+        )
+        # Start on the null space of every active equality constraint.  The
+        # previous initializer only neutralized a single factor, which made
+        # SLSQP's convergence platform-dependent whenever additional style
+        # factors were requested.
+        initial = raw_initial - constraints_matrix @ np.linalg.pinv(
+            constraints_matrix.T @ constraints_matrix
+        ) @ constraints_matrix.T @ raw_initial
         if not np.any(initial):
             diagnostic_rows.append({"date": date, "feasible": False, "status": "degenerate_constraints"})
             continue
