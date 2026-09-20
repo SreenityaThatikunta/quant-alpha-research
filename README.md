@@ -165,6 +165,10 @@ price panel, benchmark, and missing-price audit, run:
 python download_pit_data.py --start 2016-01-01 --end 2025-12-31
 ```
 
+The free Yahoo requests are checkpointed in `sp500_pit_price_batches/`, so a
+stopped download can be resumed by re-running the same command. Use
+`--restart-prices` only when deliberately discarding those checkpoints.
+
 ## Add public factor-risk data
 
 Download the official daily Fama–French five-factor series for risk attribution
