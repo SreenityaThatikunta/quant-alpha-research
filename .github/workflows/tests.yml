@@ -20,4 +20,4 @@ jobs:
       - name: Run research-integrity tests
         run: python -m pytest -q
       - name: Check Python modules compile
-        run: python -m compileall -q src run_research.py run_signal_research.py
+        run: python -m compileall -q src scripts

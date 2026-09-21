@@ -1,7 +1,7 @@
 """Run the complete research workflow from versioned input files.
 
 Example:
-    .venv/bin/python run_research.py --panel data/raw/prices.parquet \
+    .venv/bin/python -m scripts.research.run_research --panel data/raw/prices.parquet \
         --benchmark data/raw/spy.parquet --output data/processed/run_001
 """
 

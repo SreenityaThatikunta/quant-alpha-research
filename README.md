@@ -33,10 +33,10 @@ promoted; see the [decision log](reports/research_decision_log.md).
 
 ## Research dashboard
 
-Open the interactive [point-in-time proxy dashboard](reports/dashboard.html)
+Open the [point-in-time proxy dashboard](reports/dashboard.md)
 for the completed out-of-sample return, delay, and liquidity-cost diagnostics.
 The figures below are generated from the retained research artifacts with
-`python generate_report_assets.py`.
+`python -m scripts.reporting.generate_report_assets`.
 
 ![Net cumulative return comparison](reports/figures/equity_curve.svg)
 
@@ -63,8 +63,8 @@ python -m pytest -q
 ## Reproduce the public-data baseline
 
 ```bash
-python download_data.py --limit 300
-python run_research.py \
+python -m scripts.data.download_data --limit 300
+python -m scripts.research.run_research \
   --panel data/raw/sp500_current_constituents_prices.parquet \
   --benchmark data/raw/spy_benchmark.parquet \
   --output data/processed/sp500_ridge_next_open \
@@ -76,7 +76,7 @@ outer test blocks, use nested walk-forward selection. The listed penalties
 must be chosen before reviewing the resulting final OOS metrics.
 
 ```bash
-python run_research.py \
+python -m scripts.research.run_research \
   --panel data/raw/sp500_current_constituents_prices.parquet \
   --benchmark data/raw/spy_benchmark.parquet \
   --output data/processed/sp500_ridge_nested \
@@ -91,7 +91,7 @@ For a fixed OOS portfolio, publish cost/capacity assumptions rather than a
 single cost estimate:
 
 ```bash
-python run_research.py ... --cost-model liquidity \
+python -m scripts.research.run_research ... --cost-model liquidity \
   --cost-sensitivity-bps 5,10,20 --notional-sensitivity 1000000,5000000,10000000
 ```
 
@@ -110,7 +110,7 @@ historical `sector` classification. The runner joins only records available by
 the signal date and records the source file hash in its manifest:
 
 ```bash
-python run_research.py \
+python -m scripts.research.run_research \
   --panel data/raw/vendor_prices.parquet \
   --benchmark data/raw/spy_benchmark.parquet \
   --universe-history data/raw/vendor_universe_history.parquet \
@@ -126,7 +126,7 @@ public-price baseline. It uses a conservative next-business-day availability
 lag; provide an identifying contact string when retrieving SEC data.
 
 ```bash
-python download_fundamentals.py \
+python -m scripts.data.download_fundamentals \
   --tickers AAPL,MSFT,NVDA \
   --user-agent "Your Name your-email@example.com" \
   --output data/raw/sec_fundamentals.parquet
@@ -144,7 +144,7 @@ For a large universe, download bounded batches and store each result separately
 before concatenating the Parquet files:
 
 ```bash
-python download_fundamentals.py ... --tickers-file data/raw/sp500_current_constituents_sectors.csv \
+python -m scripts.data.download_fundamentals ... --tickers-file data/raw/sp500_current_constituents_sectors.csv \
   --offset 0 --limit 25 --output data/raw/sec_fundamentals_000.parquet
 ```
 
@@ -157,14 +157,14 @@ corporate-action coverage are documented limitations. The downloader saves both
 the membership change log and its provenance.
 
 ```bash
-python download_pit_universe.py --start 2016-01-01 --end 2025-12-31 \
+python -m scripts.data.download_pit_universe --start 2016-01-01 --end 2025-12-31 \
   --output data/raw/sp500_pit_universe.parquet
 ```
 
 Use the output during a research run:
 
 ```bash
-python run_research.py \
+python -m scripts.research.run_research \
   --panel data/raw/sp500_pit_prices.parquet \
   --benchmark data/raw/spy_benchmark.parquet \
   --universe-history data/raw/sp500_pit_universe.parquet \
@@ -183,7 +183,7 @@ For a single command that creates the public proxy's membership log, Yahoo
 price panel, benchmark, and missing-price audit, run:
 
 ```bash
-python download_pit_data.py --start 2016-01-01 --end 2025-12-31
+python -m scripts.data.download_pit_data --start 2016-01-01 --end 2025-12-31
 ```
 
 The free Yahoo requests are checkpointed in `sp500_pit_price_batches/`, so a
@@ -196,7 +196,7 @@ Download the official daily Fama–French five-factor series for risk attributio
 and factor-neutrality research:
 
 ```bash
-python download_factors.py --output data/raw/fama_french_5_daily.parquet
+python -m scripts.data.download_factors --output data/raw/fama_french_5_daily.parquet
 ```
 
 Pass the factor file to a research run to compound daily factors over the exact
@@ -204,7 +204,7 @@ next-open holding windows and write `holding_period_factors.csv` plus
 `factor_attribution.csv`:
 
 ```bash
-python run_research.py ... --factors data/raw/fama_french_5_daily.parquet
+python -m scripts.research.run_research ... --factors data/raw/fama_french_5_daily.parquet
 ```
 
 ## Evaluate the transparent alpha library
@@ -213,7 +213,7 @@ Evaluate momentum, reversal, low-risk, liquidity, and their beta/sector-neutral
 versions before combining any candidates:
 
 ```bash
-python run_signal_research.py \
+python -m scripts.research.run_signal_research \
   --panel data/raw/sp500_current_constituents_prices.parquet \
   --benchmark data/raw/spy_benchmark.parquet \
   --output data/processed/technical_signal_study
@@ -233,15 +233,19 @@ For a targeted, resumable run, select an individual candidate (and optionally
 its neutralized version):
 
 ```bash
-python run_signal_research.py ... --signals short_horizon_reversal --include-neutralized
+python -m scripts.research.run_signal_research ... --signals short_horizon_reversal --include-neutralized
 ```
 
 ## Project layout
 
 - `src/`: data validation, labels, features, walk-forward models, portfolio construction, backtesting, and metrics.
+- `scripts/data/`: reproducible public-data, factor, and point-in-time proxy download commands.
+- `scripts/research/`: full-model and signal-library experiment commands.
+- `scripts/reporting/`: committed-figure and dashboard generation.
 - `notebooks/`: audit, feature, model, and backtest entry points.
 - `tests/`: leakage, alignment, neutrality, and cost checks.
 - `reports/`: data dictionary and research report.
+- `docs/`: research plan and project design.
 
 ## Data and limitations
 

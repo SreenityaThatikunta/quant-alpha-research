@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from download_data import download_ohlcv
+from scripts.data.download_data import download_ohlcv
 from src.coverage import universe_price_coverage_audit
 from src.pit_universe import fetch_pitindex_snapshots, snapshots_to_change_log
 

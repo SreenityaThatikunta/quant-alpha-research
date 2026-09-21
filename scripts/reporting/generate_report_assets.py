@@ -43,12 +43,12 @@ def _line_chart(
     plot_left, plot_right = MARGIN["left"], WIDTH - MARGIN["right"]
     plot_top, plot_bottom = MARGIN["top"], HEIGHT - MARGIN["bottom"]
     dates = pd.DatetimeIndex(sorted(set().union(*(set(values.index) for _, values, _ in series))))
+    date_positions = {pd.Timestamp(date): position for position, date in enumerate(dates)}
     values = [float(item) for _, items, _ in series for item in items.dropna()]
     ymin, ymax = min(values), max(values)
     padding = max((ymax - ymin) * 0.08, 0.002)
     ymin, ymax = ymin - padding, ymax + padding
-    x_values = pd.Series(dates).astype("int64")
-    x_min, x_max = float(x_values.min()), float(x_values.max())
+    x_min, x_max = 0.0, float(max(len(dates) - 1, 1))
     lines: list[str] = []
     for tick in range(5):
         value = ymin + (ymax - ymin) * tick / 4
@@ -56,15 +56,16 @@ def _line_chart(
         label = fmt_percent(value, 0) if percent_axis else f"{value:.2f}"
         lines.append(f'<line x1="{plot_left}" x2="{plot_right}" y1="{y:.1f}" y2="{y:.1f}" stroke="{GRID}" stroke-width="1"/>')
         lines.append(f'<text x="{plot_left - 10}" y="{y + 4:.1f}" text-anchor="end" class="axis">{label}</text>')
-    for date in pd.date_range(dates.min(), dates.max(), periods=5):
-        x = _scale(float(date.value), x_min, x_max, plot_left, plot_right)
+    for position in [round(index * (len(dates) - 1) / 4) for index in range(5)]:
+        date = dates[position]
+        x = _scale(float(position), x_min, x_max, plot_left, plot_right)
         lines.append(f'<text x="{x:.1f}" y="{plot_bottom + 24}" text-anchor="middle" class="axis">{date:%Y}</text>')
     paths = []
     legend = []
     for index, (label, items, color) in enumerate(series):
         points = []
         for date, value in items.dropna().items():
-            x = _scale(float(pd.Timestamp(date).value), x_min, x_max, plot_left, plot_right)
+            x = _scale(float(date_positions[pd.Timestamp(date)]), x_min, x_max, plot_left, plot_right)
             y = _scale(float(value), ymin, ymax, plot_bottom, plot_top)
             points.append(f"{x:.1f},{y:.1f}")
         paths.append(f'<polyline points="{" ".join(points)}" fill="none" stroke="{color}" stroke-width="2.5"/>')
@@ -73,6 +74,7 @@ def _line_chart(
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {HEIGHT}" role="img" aria-labelledby="title desc">
 <title id="title">{html.escape(title)}</title><desc id="desc">{html.escape(y_label)} across the completed out-of-sample study.</desc>
 <style>.axis{{fill:{SLATE};font:12px system-ui,sans-serif}}.legend{{fill:{NAVY};font:13px system-ui,sans-serif}}.title{{fill:{NAVY};font:600 18px system-ui,sans-serif}}.label{{fill:{SLATE};font:13px system-ui,sans-serif}}</style>
+<rect x="0" y="0" width="{WIDTH}" height="{HEIGHT}" fill="white"/>
 <text x="{plot_left}" y="24" class="title">{html.escape(title)}</text>{''.join(legend)}
 <rect x="{plot_left}" y="{plot_top}" width="{plot_right - plot_left}" height="{plot_bottom - plot_top}" fill="none" stroke="{GRID}"/>
 {''.join(lines)}{''.join(paths)}
@@ -98,6 +100,7 @@ def _cost_chart(sensitivity: pd.DataFrame, output: Path) -> None:
     svg = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {HEIGHT}" role="img" aria-labelledby="title desc">
 <title id="title">Liquidity-cost sensitivity</title><desc id="desc">Sharpe ratio for fixed baseline weights at a one-million-dollar notional under increasing half-spread assumptions.</desc>
 <style>.axis{{fill:{SLATE};font:13px system-ui,sans-serif}}.value{{fill:{NAVY};font:600 14px system-ui,sans-serif}}.title{{fill:{NAVY};font:600 18px system-ui,sans-serif}}.label{{fill:{SLATE};font:13px system-ui,sans-serif}}</style>
+<rect x="0" y="0" width="{WIDTH}" height="{HEIGHT}" fill="white"/>
 <text x="78" y="32" class="title">Liquidity-cost sensitivity — fixed OOS weights, $1m notional</text>
 <line x1="120" x2="900" y1="{baseline_y}" y2="{baseline_y}" stroke="{NAVY}" stroke-width="1.5"/>
 <text x="108" y="{baseline_y + 4}" text-anchor="end" class="axis">0.00</text>{''.join(bars)}
@@ -125,6 +128,42 @@ def _dashboard_html(payload: dict[str, object]) -> str:
 <section><h2>Decision</h2><p class="note" id="decision"></p><h2>Liquidity sensitivity</h2><table><thead><tr><th>Half-spread</th><th>Baseline Sharpe</th><th>Delayed Sharpe</th></tr></thead><tbody id="costs"></tbody></table></section></div>
 <section style="margin-top:18px"><h2>Research controls retained in this run</h2><p class="note">Historical membership records are joined only when available by the signal date. Model selection is nested inside expanding historical windows with a five-session embargo. The report keeps fixed-weight cost and capacity sensitivity separate from model selection. The result is rejected because performance decays with execution delay and plausible trading costs.</p></section>
 </main><script>const DATA={data};const fmt=v=>(v*100).toFixed(1)+'%';const m=document.getElementById('metrics');DATA.metrics.forEach(x=>m.insertAdjacentHTML('beforeend',`<div class="card"><div class="label">${{x.label}}</div><div class="metric">${{x.value}}</div><div class="label">${{x.note}}</div></div>`));document.getElementById('decision').textContent=DATA.decision;const body=document.getElementById('costs');DATA.costs.forEach(x=>body.insertAdjacentHTML('beforeend',`<tr><td>${{x.bps}} bps</td><td>${{x.baseline}}</td><td>${{x.delay}}</td></tr>`));function draw(key){{const p=DATA[key],svg=document.getElementById('equity'),w=680,h=320,L=58,R=20,T=20,B=42;const vals=p.map(x=>x.equity),min=Math.min(...vals),max=Math.max(...vals),pad=Math.max(.02,(max-min)*.08),lo=min-pad,hi=max+pad;const xy=(d,i)=>[L+i*(w-L-R)/(p.length-1),T+(hi-d.equity)*(h-T-B)/(hi-lo)];const points=p.map(xy).map(a=>a.join(',')).join(' ');let grid='';for(let i=0;i<5;i++){{const v=lo+(hi-lo)*i/4,y=T+(hi-v)*(h-T-B)/(hi-lo);grid+=`<line x1="${{L}}" x2="${{w-R}}" y1="${{y}}" y2="${{y}}" stroke="#dbe3ed"/><text x="${{L-8}}" y="${{y+4}}" text-anchor="end" fill="#475569" font-size="11">${{fmt(v)}}</text>`}}const ticks=[0,Math.floor((p.length-1)/2),p.length-1].map(i=>`<text x="${{xy(p[i],i)[0]}}" y="${{h-14}}" text-anchor="middle" fill="#475569" font-size="11">${{p[i].date.slice(0,4)}}</text>`).join('');svg.innerHTML=grid+`<rect x="${{L}}" y="${{T}}" width="${{w-L-R}}" height="${{h-T-B}}" fill="none" stroke="#cbd5e1"/><polyline points="${{points}}" fill="none" stroke="${{key==='baseline'?'#2563eb':'#ea580c'}}" stroke-width="2.5"/>${{ticks}}`;}}document.querySelectorAll('button[data-series]').forEach(b=>b.onclick=()=>{{document.querySelectorAll('button[data-series]').forEach(x=>x.classList.remove('active'));b.classList.add('active');draw(b.dataset.series)}});draw('baseline');</script></body></html>'''
+
+
+def _dashboard_markdown(payload: dict[str, object]) -> str:
+    metrics = payload["metrics"]
+    costs = payload["costs"]
+    metric_rows = "\n".join(f"| {item['label']} | {item['value']} | {item['note']} |" for item in metrics)  # type: ignore[index]
+    cost_rows = "\n".join(f"| {item['bps']} bps | {item['baseline']} | {item['delay']} |" for item in costs)  # type: ignore[index]
+    return f'''# Point-in-time proxy research dashboard
+
+Completed nested out-of-sample Ridge study using a public historical-membership
+proxy. This is an educational research artifact, not investment advice.
+
+| Metric | Result | Context |
+| --- | ---: | --- |
+{metric_rows}
+
+{payload['decision']}
+
+## Net cumulative return
+
+![Net cumulative return comparison](figures/equity_curve.svg)
+
+## Forecast stability
+
+![Rolling rank IC comparison](figures/rank_ic_decay.svg)
+
+## Cost sensitivity
+
+| Half-spread assumption | Baseline Sharpe | Two-session-delay Sharpe |
+| --- | ---: | ---: |
+{cost_rows}
+
+![Liquidity-cost sensitivity](figures/liquidity_sensitivity.svg)
+
+For an interactive local view, open [dashboard.html](dashboard.html).
+'''
 
 
 def main() -> None:
@@ -170,7 +209,8 @@ def main() -> None:
         "decision": "Rejected: performance is fragile to two-session execution delay and to 10–20 bps half-spread assumptions. This dashboard presents a research control, not an alpha claim.",
     }
     (arguments.output.parent / "dashboard.html").write_text(_dashboard_html(dashboard), encoding="utf-8")
-    print(f"Wrote figures to {arguments.output} and dashboard to {arguments.output.parent / 'dashboard.html'}")
+    (arguments.output.parent / "dashboard.md").write_text(_dashboard_markdown(dashboard), encoding="utf-8")
+    print(f"Wrote figures to {arguments.output} and dashboards to {arguments.output.parent}")
 
 
 if __name__ == "__main__":

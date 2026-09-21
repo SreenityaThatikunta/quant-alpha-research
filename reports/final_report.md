@@ -6,7 +6,7 @@ Completed baseline run on 19 September 2026. This is an educational, public-data
 
 ### Reproduce
 
-Run `python download_data.py --limit 300`, then invoke `run_research.py` with the generated equity panel and SPY benchmark. The committed README provides the full command. The documented baseline output directory is `data/processed/sp500_ridge_next_open_20260919` (excluded from Git because it contains generated data).
+Run `python -m scripts.data.download_data --limit 300`, then invoke `python -m scripts.research.run_research` with the generated equity panel and SPY benchmark. The committed README provides the full command. The documented baseline output directory is `data/processed/sp500_ridge_next_open_20260919` (excluded from Git because it contains generated data).
 
 ## Methodology
 
@@ -80,8 +80,9 @@ residual return as pure alpha.
 
 ## Visual diagnostics
 
-The interactive [research dashboard](dashboard.html) provides the same
-completed-study evidence in a compact review surface.
+The [research dashboard](dashboard.md) provides the same completed-study
+evidence in a compact GitHub-friendly review surface. An interactive local
+version is also available in `dashboard.html`.
 
 ![Net cumulative return comparison](figures/equity_curve.svg)
 
@@ -92,9 +93,9 @@ completed-study evidence in a compact review surface.
 ### Reproduction
 
 ```bash
-python download_pit_data.py --start 2016-01-01 --end 2025-12-31
-python download_factors.py --output data/raw/fama_french_5_daily.parquet
-python run_research.py \
+python -m scripts.data.download_pit_data --start 2016-01-01 --end 2025-12-31
+python -m scripts.data.download_factors --output data/raw/fama_french_5_daily.parquet
+python -m scripts.research.run_research \
   --panel data/raw/sp500_pit_prices.parquet \
   --benchmark data/raw/spy_benchmark.parquet \
   --universe-history data/raw/sp500_pit_universe.parquet \
@@ -104,5 +105,5 @@ python run_research.py \
   --cost-model liquidity --cost-sensitivity-bps 5,10,20 \
   --notional-sensitivity 1000000,5000000,10000000
 
-python generate_report_assets.py
+python -m scripts.reporting.generate_report_assets
 ```

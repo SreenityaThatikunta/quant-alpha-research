@@ -10,8 +10,8 @@ recorded to preserve the research decision, not to imply investment advice.
 ## Reproduction
 
 ```bash
-.venv/bin/python download_data.py --limit 300
-.venv/bin/python run_research.py \
+.venv/bin/python -m scripts.data.download_data --limit 300
+.venv/bin/python -m scripts.research.run_research \
   --panel data/raw/sp500_current_constituents_prices.parquet \
   --benchmark data/raw/spy_benchmark.parquet \
   --output data/processed/sp500_ridge_upgraded \

@@ -26,7 +26,7 @@ promoted.
 
 ## Vendor-agnostic historical-universe change log
 
-`run_research.py --universe-history` accepts a CSV or Parquet change log. A
+`scripts.research.run_research --universe-history` accepts a CSV or Parquet change log. A
 record contains `ticker`, `effective_date`, `metadata_available_date`,
 `in_universe`, and the contemporaneous `sector` (with optional vendor fields).
 The latest record effective on or before a price date is joined only when its
