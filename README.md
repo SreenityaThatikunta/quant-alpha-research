@@ -31,6 +31,17 @@ substantially after a two-session execution delay and became negative at more
 conservative spread assumptions. That result is recorded as **rejected**, not
 promoted; see the [decision log](reports/research_decision_log.md).
 
+## Research dashboard
+
+Open the interactive [point-in-time proxy dashboard](reports/dashboard.html)
+for the completed out-of-sample return, delay, and liquidity-cost diagnostics.
+The figures below are generated from the retained research artifacts with
+`python generate_report_assets.py`.
+
+![Net cumulative return comparison](reports/figures/equity_curve.svg)
+
+![Liquidity sensitivity](reports/figures/liquidity_sensitivity.svg)
+
 ## Research decisions and evidence
 
 This repository records negative findings rather than promoting a signal based

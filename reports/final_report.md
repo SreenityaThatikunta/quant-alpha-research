@@ -78,6 +78,17 @@ exposures are small but not zero (for example, market beta 0.025), so future
 work should add factor constraints to the optimizer before treating any
 residual return as pure alpha.
 
+## Visual diagnostics
+
+The interactive [research dashboard](dashboard.html) provides the same
+completed-study evidence in a compact review surface.
+
+![Net cumulative return comparison](figures/equity_curve.svg)
+
+![Rolling rank IC comparison](figures/rank_ic_decay.svg)
+
+![Liquidity-cost sensitivity](figures/liquidity_sensitivity.svg)
+
 ### Reproduction
 
 ```bash
@@ -92,4 +103,6 @@ python run_research.py \
   --model ridge --nested-validation --ridge-alphas 1,10,100 --test-days 252 \
   --cost-model liquidity --cost-sensitivity-bps 5,10,20 \
   --notional-sensitivity 1000000,5000000,10000000
+
+python generate_report_assets.py
 ```
